@@ -91,11 +91,11 @@ jobs:
             else
               git push --set-upstream origin "$branch"
             fi
-            publication_pending=true
-          elif [[ "$remote_exists" == true ]] && (( $(git rev-list --count "refs/remotes/origin/$DEFAULT_BRANCH..HEAD") > 0 )); then
-            publication_pending=true
-          else
+          fi
+          if git diff --quiet "refs/remotes/origin/$DEFAULT_BRANCH" HEAD -- pointers public; then
             publication_pending=false
+          else
+            publication_pending=true
           fi
           echo "PUBLICATION_PENDING=$publication_pending" >> "$GITHUB_ENV"
 

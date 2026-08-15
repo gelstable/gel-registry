@@ -170,6 +170,8 @@ def test_validation_scopes_live_rehearsal_to_capture_and_publication_changes(
     scope_text = "\n".join(
         str(step.get("run", "")) for step in scope["steps"] if isinstance(step, dict)
     )
+    assert "capture_paths" in scope_text
+    assert "capture_only" in scope_text
     assert '"$HEAD_REF" == "capture/legacy-2026-08-bootstrap"' in scope_text
     assert '"$HEAD_REF" == "publish/legacy-2026-08-bootstrap"' in scope_text
     assert '"$release" == false' in scope_text
@@ -184,6 +186,16 @@ def test_publication_and_promotion_reruns_fail_closed_or_are_idempotent(
     publication_text = json.dumps(workflows["publish-bootstrap.yml"])
     assert "PUBLICATION_PENDING" in publication_text
     assert "already present" in publication_text
+    publication_scripts = "\n".join(
+        str(step.get("run", ""))
+        for step in workflows["publish-bootstrap.yml"]["jobs"]["publish"]["steps"]
+        if isinstance(step, dict)
+    )
+    assert (
+        'git diff --quiet "refs/remotes/origin/$DEFAULT_BRANCH" HEAD -- pointers public'
+        in publication_scripts
+    )
+    assert "git rev-list --count" not in publication_text
     promotion_text = json.dumps(workflows["promote.yml"])
     assert "if ! discovered_tags=" in promotion_text
     assert "could not discover stable Gel CLI releases" in promotion_text

@@ -35,10 +35,23 @@ jobs:
           base="$(git merge-base HEAD "refs/remotes/origin/$BASE_REF")"
           changed="$(git diff --name-only "$base" HEAD)"
           capture=false
+          capture_paths=false
+          capture_only=true
           publication=false
           rehearsal=false
           release=false
-          if grep -Eq '^(upstream/packages\.geldata\.com/|bootstrap/)' <<<"$changed"; then
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            case "$path" in
+              upstream/packages.geldata.com/legacy-2026-08-bootstrap/*|bootstrap/*)
+                capture_paths=true
+                ;;
+              *)
+                capture_only=false
+                ;;
+            esac
+          done <<<"$changed"
+          if [[ "$capture_paths" == true && "$capture_only" == true && "$HEAD_REF" == "capture/legacy-2026-08-bootstrap" ]]; then
             capture=true
           fi
           if grep -Eq '^(pointers/latest\.json$|public/)' <<<"$changed"; then
