@@ -91,6 +91,17 @@ def _validate_utc(value: datetime) -> datetime:
     return value
 
 
+def _validate_installref_url(value: str) -> None:
+    """Validate legacy and verified Gelstable installref URL origins."""
+
+    _, parsed = _url_parts(value)
+    if parsed.netloc and parsed.hostname not in {
+        "packages.geldata.com",
+        "github.com",
+    }:
+        raise ValueError("installref URL must use packages.geldata.com or github.com")
+
+
 class Verification(BaseModel):
     """Legacy or release artifact byte verification metadata."""
 
@@ -133,7 +144,7 @@ class InstallRef(BaseModel):
     @field_validator("ref")
     @classmethod
     def validate_ref(cls, value: str) -> str:
-        _url_parts(value, host="packages.geldata.com")
+        _validate_installref_url(value)
         return value
 
 
@@ -158,7 +169,7 @@ class PackageEntry(BaseModel):
     @field_validator("installref")
     @classmethod
     def validate_installref(cls, value: str) -> str:
-        _url_parts(value, host="packages.geldata.com")
+        _validate_installref_url(value)
         return value
 
 

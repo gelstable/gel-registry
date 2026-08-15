@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "product": "gel-cli",
+  "channel": "stable",
+  "version": "1.0.0",
+  "source": {
+    "repository": "gelstable/gel-cli",
+    "release_tag": "v1.0.0",
+    "release_id": 100
+  },
+  "promoted_at": "2026-08-15T12:00:00Z",
+  "artifacts": [
+    {
+      "platform": "x86_64-unknown-linux-musl",
+      "encoding": "identity",
+      "media_type": "application/x-pie-executable",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-x86_64-unknown-linux-musl",
+      "size": 100,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "blake2b": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "platform": "x86_64-unknown-linux-musl",
+      "encoding": "zstd",
+      "media_type": "application/x-pie-executable",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-x86_64-unknown-linux-musl.zst",
+      "size": 90,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "blake2b": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "platform": "aarch64-unknown-linux-musl",
+      "encoding": "identity",
+      "media_type": "application/x-pie-executable",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-aarch64-unknown-linux-musl",
+      "size": 100,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "blake2b": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "platform": "aarch64-unknown-linux-musl",
+      "encoding": "zstd",
+      "media_type": "application/x-pie-executable",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-aarch64-unknown-linux-musl.zst",
+      "size": 90,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "blake2b": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "platform": "aarch64-apple-darwin",
+      "encoding": "identity",
+      "media_type": "application/x-mach-binary",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-aarch64-apple-darwin",
+      "size": 100,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "blake2b": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "platform": "aarch64-apple-darwin",
+      "encoding": "zstd",
+      "media_type": "application/x-mach-binary",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-aarch64-apple-darwin.zst",
+      "size": 90,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "blake2b": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "platform": "x86_64-pc-windows-msvc",
+      "encoding": "identity",
+      "media_type": "application/x-dosexec",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-x86_64-pc-windows-msvc.exe",
+      "size": 100,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "blake2b": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "platform": "x86_64-pc-windows-msvc",
+      "encoding": "zstd",
+      "media_type": "application/x-dosexec",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-x86_64-pc-windows-msvc.exe.zst",
+      "size": 90,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "blake2b": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    {
+      "platform": "aarch64-pc-windows-msvc",
+      "encoding": "identity",
+      "media_type": "application/x-dosexec",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-aarch64-pc-windows-msvc.exe",
+      "size": 100,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "blake2b": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "platform": "aarch64-pc-windows-msvc",
+      "encoding": "zstd",
+      "media_type": "application/x-dosexec",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/gel-cli-aarch64-pc-windows-msvc.exe.zst",
+      "size": 90,
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "blake2b": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ]
+}
