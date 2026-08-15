@@ -9,6 +9,7 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
+import gel_registry.capture as capture_module
 from gel_registry.capture import CaptureError, capture_legacy, verify_live_capture
 from gel_registry.constants import capture_urls
 
@@ -198,6 +199,98 @@ def test_capture_legacy_rejects_changed_recheck_bytes_atomically(
     assert not destination.exists()
 
 
+@pytest.mark.parametrize(
+    ("validator", "request_header"),
+    [("ETag", "if-none-match"), ("Last-Modified", "if-modified-since")],
+)
+def test_capture_legacy_accepts_validator_backed_304(
+    httpx_mock: HTTPXMock,
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    validator: str,
+    request_header: str,
+) -> None:
+    urls = capture_urls()
+    body = _index_bytes(package_index_data, pretty=False)
+    first_header = (
+        '"capture-0"' if validator == "ETag" else "Sat, 15 Aug 2026 12:34:56 GMT"
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url=urls[0][2],
+        status_code=200,
+        content=body,
+        headers={validator: first_header},
+    )
+    for _channel, _platform, url in urls[1:]:
+        httpx_mock.add_response(method="GET", url=url, status_code=404)
+    httpx_mock.add_response(method="GET", url=urls[0][2], status_code=304)
+    for _channel, _platform, url in urls[1:]:
+        httpx_mock.add_response(method="GET", url=url, status_code=404)
+
+    destination = tmp_path / "capture"
+    with httpx.Client() as client:
+        manifest = capture_legacy(client, destination, CAPTURED_AT)
+
+    assert manifest.entries[0].status == 200
+    requests = httpx_mock.get_requests()
+    assert requests[24].headers[request_header] == first_header
+
+
+def test_capture_legacy_rejects_unconditional_304(
+    httpx_mock: HTTPXMock,
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+) -> None:
+    urls = capture_urls()
+    body = _index_bytes(package_index_data, pretty=False)
+    httpx_mock.add_response(method="GET", url=urls[0][2], status_code=200, content=body)
+    for _channel, _platform, url in urls[1:]:
+        httpx_mock.add_response(method="GET", url=url, status_code=404)
+    httpx_mock.add_response(method="GET", url=urls[0][2], status_code=304)
+
+    destination = tmp_path / "capture"
+    with (
+        httpx.Client() as client,
+        pytest.raises(CaptureError, match="expected status 200, observed 304"),
+    ):
+        capture_legacy(client, destination, CAPTURED_AT)
+    assert not destination.exists()
+
+
+def test_capture_legacy_no_replace_publication_survives_destination_race(
+    httpx_mock: HTTPXMock,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+) -> None:
+    urls = capture_urls()
+    body = _index_bytes(package_index_data, pretty=False)
+    _register_initial_matrix(httpx_mock, {urls[0][2]: body})
+    for _channel, _platform, url in urls:
+        httpx_mock.add_response(
+            method="GET",
+            url=url,
+            status_code=200 if url == urls[0][2] else 404,
+            content=body if url == urls[0][2] else b"",
+        )
+
+    real_rename = capture_module._rename_noreplace
+
+    def create_destination_then_rename(source: Path, destination: Path) -> None:
+        destination.mkdir()
+        real_rename(source, destination)
+
+    monkeypatch.setattr(
+        capture_module, "_rename_noreplace", create_destination_then_rename
+    )
+    destination = tmp_path / "capture"
+    with httpx.Client() as client, pytest.raises(CaptureError):
+        capture_legacy(client, destination, CAPTURED_AT)
+    assert destination.is_dir()
+    assert not (destination / "capture.json").exists()
+
+
 def test_capture_legacy_rejects_changed_404_to_200_atomically(
     httpx_mock: HTTPXMock,
     tmp_path: Path,
@@ -287,5 +380,11 @@ def test_verify_live_capture_error_identifies_matrix_entry(
     destination = tmp_path / "capture"
     with httpx.Client() as client:
         manifest = capture_legacy(client, destination, CAPTURED_AT)
-        with pytest.raises(CaptureError, match="stable.*x86_64-unknown-linux-gnu"):
+        with pytest.raises(
+            CaptureError,
+            match=(
+                "stable.*x86_64-unknown-linux-gnu.*expected status 200.*"
+                "observed status 200.*sha256"
+            ),
+        ):
             verify_live_capture(client, destination, manifest)

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
 import os
 import shutil
+import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,7 +18,7 @@ import httpx
 from pydantic import ValidationError
 
 from .constants import CAPTURE_ID, ORIGIN, capture_urls
-from .digest import Digests, canonical_json, hash_file
+from .digest import Digests, canonical_json, hash_bytes, hash_file
 from .schema import CaptureEntry, CaptureManifest, PackageIndex
 
 _USER_AGENT = "gel-registry-importer/1"
@@ -28,6 +31,9 @@ _REQUEST_TIMEOUT = httpx.Timeout(
     pool=60.0,
 )
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_RENAME_EXCL = 0x00000004
+_RENAME_NOREPLACE = 0x00000001
+_AT_FDCWD = -100
 
 
 class CaptureError(RuntimeError):
@@ -195,6 +201,47 @@ def _conditional_headers(entry: CaptureEntry) -> tuple[str, str] | None:
     return None
 
 
+def _rename_noreplace(source: Path, destination: Path) -> None:
+    """Atomically rename a directory without replacing a destination."""
+
+    source_bytes = os.fsencode(str(source))
+    destination_bytes = os.fsencode(str(destination))
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        try:
+            renamex_np = libc.renamex_np
+        except AttributeError as exc:
+            raise OSError(errno.ENOTSUP, "renamex_np is unavailable") from exc
+        renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex_np.restype = ctypes.c_int
+        result = renamex_np(source_bytes, destination_bytes, _RENAME_EXCL)
+    elif sys.platform.startswith("linux"):
+        try:
+            renameat2 = libc.renameat2
+        except AttributeError as exc:
+            raise OSError(errno.ENOTSUP, "renameat2 is unavailable") from exc
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            _AT_FDCWD,
+            source_bytes,
+            _AT_FDCWD,
+            destination_bytes,
+            _RENAME_NOREPLACE,
+        )
+    else:
+        raise OSError(errno.ENOTSUP, "atomic no-replace rename is unavailable")
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), str(destination))
+
+
 def _capture_entry(
     channel: str,
     platform: str,
@@ -242,17 +289,18 @@ def _recheck_entry(
 ) -> None:
     temporary_path = root / f".recheck-{index}.json"
     try:
+        conditional = _conditional_headers(entry)
         observed = _fetch(
             client,
             entry.url,
-            conditional=_conditional_headers(entry),
+            conditional=conditional,
             output_path=temporary_path,
         )
     except CaptureError as exc:
         raise _entry_error(entry.channel, entry.platform, str(exc)) from exc
 
     try:
-        if observed.status == 304 and entry.status == 200:
+        if observed.status == 304 and entry.status == 200 and conditional is not None:
             return
         if observed.status != entry.status:
             raise _entry_error(
@@ -329,7 +377,7 @@ def capture_legacy(
 
         if destination.exists() or destination.is_symlink():
             raise CaptureError(f"capture destination already exists: {destination}")
-        os.rename(temporary_root, destination)
+        _rename_noreplace(temporary_root, destination)
         committed = True
         return manifest
     except CaptureError:
@@ -387,10 +435,15 @@ def verify_live_capture(
                 f"expected status {entry.status}, observed {observed.status}",
             )
         if entry.status == 200 and observed.body != expected_body:
+            observed_digests = hash_bytes(observed.body or b"")
             raise _entry_error(
                 entry.channel,
                 entry.platform,
-                "live body differs from captured bytes",
+                "expected status 200, observed status 200 with differing bytes "
+                f"(expected size={entry.size} sha256={entry.sha256} "
+                f"blake2b={entry.blake2b}; observed size={observed_digests.size} "
+                f"sha256={observed_digests.sha256} "
+                f"blake2b={observed_digests.blake2b})",
             )
 
 
