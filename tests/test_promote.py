@@ -291,6 +291,99 @@ def test_immutable_install_failure_rolls_back_new_files(
         assert not (tmp_path / "pointers").exists()
 
 
+@pytest.mark.parametrize("failure_call", [1, 2, 3])
+def test_native_immutable_io_failure_rolls_back_new_files(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    failure_call: int,
+) -> None:
+    _write_bootstrap(tmp_path, package_index_data)
+    real_create = promote_module._create_file
+    calls = 0
+
+    def fail_create(*args: object, **kwargs: object) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == failure_call:
+            raise OSError("injected native immutable I/O failure")
+        return real_create(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(promote_module, "_create_file", fail_create)
+    with pytest.raises(PromotionError, match="could not install immutable"):
+        promote_release(tmp_path, _release())
+
+    assert not (tmp_path / "releases").exists()
+    assert not (tmp_path / "public").exists()
+    assert not (tmp_path / "pointers").exists()
+
+
+def test_native_parent_creation_failure_rolls_back_new_files(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_bootstrap(tmp_path, package_index_data)
+    real_parent = promote_module._ensure_parent
+    calls = 0
+
+    def fail_parent(*args: object, **kwargs: object) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected parent creation failure")
+        real_parent(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(promote_module, "_ensure_parent", fail_parent)
+    with pytest.raises(PromotionError, match="could not install immutable"):
+        promote_release(tmp_path, _release())
+
+    assert not (tmp_path / "releases").exists()
+    assert not (tmp_path / "public").exists()
+    assert not (tmp_path / "pointers").exists()
+
+
+def test_preexisting_exact_file_read_failure_rolls_back_new_files(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_bootstrap(tmp_path, package_index_data)
+    real_create = promote_module._create_file
+    real_read = Path.read_bytes
+    calls = 0
+    raced_target: Path | None = None
+
+    def fail_create(*args: object, **kwargs: object) -> bool:
+        nonlocal calls
+        nonlocal raced_target
+        calls += 1
+        if calls == 2:
+            target = args[1]
+            data = args[2]
+            assert isinstance(target, Path)
+            assert isinstance(data, bytes)
+            raced_target = target
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+
+            def fail_read(path: Path) -> bytes:
+                if path == target:
+                    raise OSError("injected existing-file read failure")
+                return real_read(path)
+
+            monkeypatch.setattr(Path, "read_bytes", fail_read)
+        return real_create(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(promote_module, "_create_file", fail_create)
+    with pytest.raises(PromotionError, match="could not install immutable"):
+        promote_release(tmp_path, _release())
+
+    assert not (tmp_path / "releases").exists()
+    assert not (tmp_path / "pointers").exists()
+    assert raced_target is not None and raced_target.is_file()
+
+
 @pytest.mark.parametrize("fail_label", ["public/registry.json", "pointers/latest.json"])
 def test_mutable_install_failure_rolls_back_new_immutable_files(
     tmp_path: Path,

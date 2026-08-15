@@ -524,9 +524,13 @@ def _install_transaction(
                 ) from exc
             if _create_file(repo, target, data, relative, created_dirs):
                 created_files.append((target, data))
-    except PromotionError:
+    except (OSError, PromotionError) as exc:
         _rollback_created(created_files, created_dirs)
-        raise
+        if isinstance(exc, PromotionError):
+            raise
+        raise PromotionError(
+            f"could not install immutable path {relative}: {exc}"
+        ) from exc
 
     if not mutable:
         return
