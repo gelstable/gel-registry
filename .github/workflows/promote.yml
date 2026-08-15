@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t tags < <(
+          if ! discovered_tags="$(
             gh api --paginate repos/gelstable/gel-cli/releases \
               --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' \
               | while IFS= read -r tag; do
@@ -51,7 +51,14 @@ jobs:
                   fi
                 done \
               | sort -Vu
-          )
+          )"; then
+            echo "could not discover stable Gel CLI releases" >&2
+            exit 1
+          fi
+          tags=()
+          if [[ -n "$discovered_tags" ]]; then
+            mapfile -t tags <<<"$discovered_tags"
+          fi
 
           if (( ${#tags[@]} == 0 )); then
             echo "no stable Gel CLI releases discovered"

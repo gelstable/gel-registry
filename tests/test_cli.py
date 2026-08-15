@@ -127,6 +127,27 @@ def test_validate_defaults_to_local_only(
     assert capsys.readouterr().err == ""
 
 
+def test_validate_capture_uses_the_prepublication_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from gel_registry import __main__ as cli
+
+    calls: list[Path | None] = []
+
+    def capture_gate(repository: Path, base: Path | None = None) -> ValidationReport:
+        calls.append(base)
+        assert repository == tmp_path
+        return ValidationReport(checks=("capture.manifest",))
+
+    monkeypatch.setattr(cli.validate, "validate_capture_local", capture_gate)
+
+    assert cli.main(["validate-capture", "--repo", str(tmp_path)]) == 0
+    assert calls == [None]
+    assert capsys.readouterr().err == ""
+
+
 def test_capture_requires_explicit_timestamp() -> None:
     from gel_registry.__main__ import main
 

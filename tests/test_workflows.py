@@ -133,6 +133,8 @@ def test_workflows_use_locked_dependencies_and_forbid_unsafe_dispatches(
     local_text = json.dumps(local)
     assert "packages.geldata.com" not in local_text
     assert "verify-capture-live" not in local_text
+    assert "validate-capture" in local_text
+    assert "normalize --repo . --check" in local_text
 
 
 def test_pr_producers_have_only_job_scoped_write_permissions(
@@ -155,3 +157,34 @@ def test_triggers_match_their_operational_scope(
         "workflow_dispatch",
     }
     assert "pull_request" in workflows["validate.yml"]["on"]
+
+
+def test_validation_scopes_live_rehearsal_to_capture_and_publication_changes(
+    workflows: dict[str, dict[str, Any]],
+) -> None:
+    scope = workflows["validate.yml"]["jobs"]["scope"]
+    assert isinstance(scope, dict)
+    outputs = scope.get("outputs")
+    assert isinstance(outputs, dict)
+    assert "capture" in outputs
+    scope_text = "\n".join(
+        str(step.get("run", "")) for step in scope["steps"] if isinstance(step, dict)
+    )
+    assert '"$HEAD_REF" == "capture/legacy-2026-08-bootstrap"' in scope_text
+    assert '"$HEAD_REF" == "publish/legacy-2026-08-bootstrap"' in scope_text
+    assert '"$release" == false' in scope_text
+    rehearsal = workflows["validate.yml"]["jobs"]["capture-rehearsal"]
+    assert isinstance(rehearsal, dict)
+    assert "needs.scope.outputs.rehearsal" in str(rehearsal.get("if"))
+
+
+def test_publication_and_promotion_reruns_fail_closed_or_are_idempotent(
+    workflows: dict[str, dict[str, Any]],
+) -> None:
+    publication_text = json.dumps(workflows["publish-bootstrap.yml"])
+    assert "PUBLICATION_PENDING" in publication_text
+    assert "already present" in publication_text
+    promotion_text = json.dumps(workflows["promote.yml"])
+    assert "if ! discovered_tags=" in promotion_text
+    assert "could not discover stable Gel CLI releases" in promotion_text
+    assert "mapfile -t tags < <(" not in promotion_text

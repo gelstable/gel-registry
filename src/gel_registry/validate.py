@@ -760,19 +760,24 @@ def _check_render_drift(repo: Path, collector: _Collector) -> None:
         collector.add(check, _display_path(repo, repo), str(exc))
 
 
-def _check_history(repo: Path, base: Path, collector: _Collector) -> None:
+def _check_history(
+    repo: Path,
+    base: Path,
+    collector: _Collector,
+    roots: tuple[Path, ...] | None = None,
+) -> None:
     check = "history.append_only"
     collector.begin(check)
     if not base.exists() or base.is_symlink() or not base.is_dir():
         collector.add(check, base, "merge-base tree is not a directory")
         return
-    roots = (
+    immutable_roots = roots or (
         _CAPTURE_REL,
         Path("bootstrap"),
         Path("releases"),
         Path("public/s"),
     )
-    for relative_root in roots:
+    for relative_root in immutable_roots:
         base_root = base / relative_root
         head_root = repo / relative_root
         try:
@@ -787,6 +792,52 @@ def _check_history(repo: Path, base: Path, collector: _Collector) -> None:
                 collector.add(check, path, "immutable path was deleted")
             elif head_files[relative] != base_files[relative]:
                 collector.add(check, path, "immutable path changed")
+
+
+def validate_capture_local(repo: Path, base: Path | None = None) -> ValidationReport:
+    """Validate a capture PR before any publication state exists.
+
+    Capture pull requests intentionally do not build a snapshot or select a
+    pointer.  This gate therefore checks only the immutable capture evidence,
+    normalized bootstrap files, and their append-only history.
+    """
+
+    repository = Path(repo)
+    collector = _Collector()
+    if repository.is_symlink() or not repository.is_dir():
+        collector.add("repository", repository, "repository is not a directory")
+        return collector.report()
+
+    manifest = _load_capture(repository, collector)
+    _check_capture_bodies(repository, manifest, collector)
+    _check_bootstrap(repository, manifest, collector)
+
+    normalization_check = "normalization.drift"
+    collector.begin(normalization_check)
+    capture_root = _capture_root(repository)
+    bootstrap_root = repository / "bootstrap"
+    if manifest is not None and bootstrap_root.exists():
+        try:
+            validate_normalization(capture_root, bootstrap_root)
+        except (NormalizationError, OSError, ValueError) as exc:
+            collector.add(
+                normalization_check, _display_path(repository, bootstrap_root), str(exc)
+            )
+    else:
+        collector.add(
+            normalization_check,
+            _display_path(repository, bootstrap_root),
+            "normalization inputs are missing",
+        )
+
+    if base is not None:
+        _check_history(
+            repository,
+            Path(base),
+            collector,
+            roots=(_CAPTURE_REL, Path("bootstrap")),
+        )
+    return collector.report()
 
 
 def validate_local(repo: Path, base: Path | None = None) -> ValidationReport:
@@ -1119,6 +1170,7 @@ def validate_capture_rehearsal(repo: Path, client: httpx.Client) -> ValidationRe
 __all__ = [
     "ValidationReport",
     "validate_capture_rehearsal",
+    "validate_capture_local",
     "validate_local",
     "validate_release_remotes",
 ]

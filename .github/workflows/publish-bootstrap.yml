@@ -40,6 +40,12 @@ jobs:
           test -d bootstrap
           test -n "$(find bootstrap -type f -name '*.json' -print -quit)"
 
+      - name: Render canonical support documents
+        run: >-
+          uv run python -c
+          'from pathlib import Path; from gel_registry.render import render_schemas;
+          render_schemas(Path("."))'
+
       - name: Build and select the nonempty bootstrap snapshot
         run: |
           set -euo pipefail
@@ -85,7 +91,13 @@ jobs:
             else
               git push --set-upstream origin "$branch"
             fi
+            publication_pending=true
+          elif [[ "$remote_exists" == true ]] && (( $(git rev-list --count "refs/remotes/origin/$DEFAULT_BRANCH..HEAD") > 0 )); then
+            publication_pending=true
+          else
+            publication_pending=false
           fi
+          echo "PUBLICATION_PENDING=$publication_pending" >> "$GITHUB_ENV"
 
       - name: Open or reuse the publication pull request
         env:
@@ -96,6 +108,10 @@ jobs:
           branch="publish/legacy-2026-08-bootstrap"
           number="$(gh pr list --state open --head "$branch" --base "$DEFAULT_BRANCH" --json number --jq '.[0].number')"
           if [[ -z "$number" ]]; then
+            if [[ "${PUBLICATION_PENDING:-false}" != true ]]; then
+              echo "bootstrap publication is already present; no pull request is needed"
+              exit 0
+            fi
             gh pr create \
               --base "$DEFAULT_BRANCH" \
               --head "$branch" \

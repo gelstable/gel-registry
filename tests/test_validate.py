@@ -25,6 +25,7 @@ from gel_registry.schema import (
 )
 from gel_registry.validate import (
     ValidationReport,
+    validate_capture_local,
     validate_capture_rehearsal,
     validate_local,
 )
@@ -124,6 +125,46 @@ def test_local_validation_reports_immutable_history_path(
     body_path.write_bytes(body_path.read_bytes() + b"\n")
 
     report = validate_local(tmp_path, base)
+
+    assert not report.ok
+    assert any(
+        "bootstrap/stable-x86_64-unknown-linux-gnu.json" in error
+        for error in report.errors
+    )
+
+
+def test_capture_validation_does_not_require_publication_state(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    _complete_repository(tmp_path, package_index_data)
+    shutil.rmtree(tmp_path / "public")
+    shutil.rmtree(tmp_path / "pointers")
+
+    report = validate_capture_local(tmp_path)
+
+    assert report.ok, report.errors
+    assert {
+        "capture.manifest",
+        "capture.bodies",
+        "bootstrap.schema",
+        "normalization.drift",
+    }.issubset(report.checks)
+    assert "pointer.integrity" not in report.checks
+    assert "render.drift" not in report.checks
+
+
+def test_capture_validation_checks_only_capture_and_bootstrap_history(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    _complete_repository(tmp_path, package_index_data)
+    base = tmp_path.parent / "capture-base"
+    shutil.copytree(tmp_path, base)
+    shutil.rmtree(tmp_path / "public")
+    shutil.rmtree(tmp_path / "pointers")
+    body_path = tmp_path / "bootstrap" / "stable-x86_64-unknown-linux-gnu.json"
+    body_path.write_bytes(body_path.read_bytes() + b"\n")
+
+    report = validate_capture_local(tmp_path, base)
 
     assert not report.ok
     assert any(

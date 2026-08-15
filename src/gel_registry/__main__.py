@@ -194,6 +194,11 @@ def _run_validate(args: argparse.Namespace) -> int:
     return _print_report(report)
 
 
+def _run_validate_capture(args: argparse.Namespace) -> int:
+    report = validate.validate_capture_local(Path(args.repo), args.base)
+    return _print_report(report)
+
+
 def _run_verify_capture_live(args: argparse.Namespace) -> int:
     with httpx.Client() as client:
         report = validate.validate_capture_rehearsal(Path(args.repo), client)
@@ -279,6 +284,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="explicit release record to verify remotely",
     )
     validate_parser.set_defaults(handler=_run_validate)
+
+    capture_validate_parser = commands.add_parser(
+        "validate-capture", help="validate capture and bootstrap before publication"
+    )
+    _add_repo(capture_validate_parser)
+    capture_validate_parser.add_argument(
+        "--base",
+        type=Path,
+        default=None,
+        help="optional merge-base tree for immutable capture-history checks",
+    )
+    capture_validate_parser.set_defaults(handler=_run_validate_capture)
 
     live_parser = commands.add_parser(
         "verify-capture-live", help="explicitly rehearse the capture remotely"

@@ -14,6 +14,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      capture: ${{ steps.changed.outputs.capture }}
       rehearsal: ${{ steps.changed.outputs.rehearsal }}
       release: ${{ steps.changed.outputs.release }}
     steps:
@@ -27,19 +28,30 @@ jobs:
         id: changed
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin "$BASE_REF"
           base="$(git merge-base HEAD "refs/remotes/origin/$BASE_REF")"
           changed="$(git diff --name-only "$base" HEAD)"
+          capture=false
+          publication=false
           rehearsal=false
           release=false
-          if grep -Eq '^(upstream/packages\.geldata\.com/|bootstrap/|pointers/latest\.json$|public/)' <<<"$changed"; then
-            rehearsal=true
+          if grep -Eq '^(upstream/packages\.geldata\.com/|bootstrap/)' <<<"$changed"; then
+            capture=true
+          fi
+          if grep -Eq '^(pointers/latest\.json$|public/)' <<<"$changed"; then
+            publication=true
           fi
           if grep -Eq '^releases/gel-cli/[^/]+\.json$' <<<"$changed"; then
             release=true
           fi
+          if [[ "$capture" == true && "$HEAD_REF" == "capture/legacy-2026-08-bootstrap" ]] || \
+            [[ "$publication" == true && "$release" == false && "$HEAD_REF" == "publish/legacy-2026-08-bootstrap" ]]; then
+            rehearsal=true
+          fi
+          echo "capture=$capture" >> "$GITHUB_OUTPUT"
           echo "rehearsal=$rehearsal" >> "$GITHUB_OUTPUT"
           echo "release=$release" >> "$GITHUB_OUTPUT"
 
@@ -83,10 +95,16 @@ jobs:
           uv run mypy src tests
           uv run pytest -q
 
+      - name: Check the pre-publication capture phase
+        if: needs.scope.outputs.capture == 'true'
+        run: uv run gel-registry validate-capture --repo . --base "$BASE_TREE"
+
       - name: Check normalization drift
+        if: needs.scope.outputs.capture != 'true'
         run: uv run gel-registry normalize --repo . --check
 
       - name: Check render drift and immutable history
+        if: needs.scope.outputs.capture != 'true'
         run: uv run gel-registry validate --repo . --base "$BASE_TREE"
 
   capture-rehearsal:
