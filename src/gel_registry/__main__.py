@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import tempfile
 from collections.abc import Callable, Iterable, Sequence
@@ -18,6 +19,11 @@ from .constants import CAPTURE_ID
 from .schema import ReleaseRecord
 
 type Handler = Callable[[argparse.Namespace], int]
+
+_RFC3339_UTC = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|\+00:00)"
+)
 
 
 def _capture_root(repo: Path) -> Path:
@@ -36,7 +42,9 @@ def _add_repo(parser: argparse.ArgumentParser) -> None:
 def _parse_captured_at(value: str) -> datetime:
     """Parse the one timestamp supplied for a capture attempt."""
 
-    candidate = value.strip()
+    candidate = value
+    if _RFC3339_UTC.fullmatch(candidate) is None:
+        raise argparse.ArgumentTypeError("captured-at must be an RFC3339 UTC timestamp")
     if candidate.endswith("Z"):
         candidate = candidate[:-1] + "+00:00"
     try:

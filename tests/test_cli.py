@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from argparse import ArgumentTypeError
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -132,6 +133,41 @@ def test_capture_requires_explicit_timestamp() -> None:
     with pytest.raises(SystemExit) as error:
         main(["capture", "--repo", "/tmp"])
     assert error.value.code != 0
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-08-15 12:00:00Z",
+        "2026-08-15T12:00Z",
+        "20260815T120000Z",
+        "2026-08-15T12:00:00",
+        "2026-08-15T12:00:00+01:00",
+        "2026-08-15T12:00:00+0000",
+        " 2026-08-15T12:00:00Z",
+    ],
+)
+def test_captured_at_rejects_non_strict_rfc3339_utc(value: str) -> None:
+    from gel_registry.__main__ import _parse_captured_at
+
+    with pytest.raises(ArgumentTypeError):
+        _parse_captured_at(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-08-15T12:00:00Z",
+        "2026-08-15T12:00:00+00:00",
+        "2026-08-15T12:00:00.123456Z",
+    ],
+)
+def test_captured_at_accepts_strict_rfc3339_utc(value: str) -> None:
+    from gel_registry.__main__ import _parse_captured_at
+
+    parsed = _parse_captured_at(value)
+    assert parsed.tzinfo is UTC
+    assert parsed.utcoffset() == timedelta(0)
 
 
 def test_capture_and_live_verification_are_explicit_commands(
