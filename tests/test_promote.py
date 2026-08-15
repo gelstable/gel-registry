@@ -106,6 +106,34 @@ def test_publish_bootstrap_refuses_zero_package_indexes(
     assert not (tmp_path / "public").exists()
 
 
+def test_publish_bootstrap_counts_nested_bootstrap_sources(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    path = tmp_path / "bootstrap" / "nested" / "stable-x86_64-unknown-linux-gnu.json"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(canonical_json(PackageIndex.model_validate(package_index_data)))
+
+    result = publish_bootstrap(tmp_path)
+
+    assert result.snapshot
+
+
+def test_empty_bootstrap_rejected_even_with_existing_release(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    package_index_data["packages"] = []
+    _write_bootstrap(tmp_path, package_index_data)
+    release_path = tmp_path / "releases/gel-cli/1.0.0.json"
+    release_path.parent.mkdir(parents=True)
+    release_path.write_bytes((FIXTURES / "releases/gel-cli/1.0.0.json").read_bytes())
+
+    with pytest.raises(PromotionError, match="no bootstrap packages"):
+        publish_bootstrap(tmp_path)
+
+    assert not (tmp_path / "pointers").exists()
+    assert not (tmp_path / "public").exists()
+
+
 def test_promote_release_writes_record_and_composes_bootstrap(
     tmp_path: Path, package_index_data: dict[str, object]
 ) -> None:
@@ -289,6 +317,58 @@ def test_mutable_install_failure_rolls_back_new_immutable_files(
     assert not (tmp_path / "releases").exists()
     assert not (tmp_path / "public").exists()
     assert not (tmp_path / "pointers").exists()
+
+
+@pytest.mark.parametrize("failure_call", [1, 2, 3])
+def test_prior_mutable_state_failure_rolls_back_new_immutable_files(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    failure_call: int,
+) -> None:
+    _write_bootstrap(tmp_path, package_index_data)
+    real_prior = promote_module._prior_file
+    calls = 0
+
+    def fail_prior(path: Path) -> bytes | None:
+        nonlocal calls
+        calls += 1
+        if calls == failure_call:
+            raise PromotionError("injected prior-state failure")
+        return real_prior(path)
+
+    monkeypatch.setattr(promote_module, "_prior_file", fail_prior)
+    with pytest.raises(PromotionError, match="injected"):
+        promote_release(tmp_path, _release())
+
+    assert not (tmp_path / "releases").exists()
+    assert not (tmp_path / "public").exists()
+    assert not (tmp_path / "pointers").exists()
+
+
+def test_raced_parent_directory_is_not_journaled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created: list[Path] = []
+    target = tmp_path / "raced" / "file.json"
+    real_mkdir = Path.mkdir
+
+    def race_mkdir(
+        path: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        if path == target.parent and not exist_ok:
+            real_mkdir(path, mode=mode, parents=parents, exist_ok=True)
+            raise FileExistsError(path)
+        real_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", race_mkdir)
+    promote_module._ensure_parent(tmp_path, target, created)
+
+    assert target.parent.is_dir()
+    assert created == []
 
 
 def test_branch_names_are_deterministic(

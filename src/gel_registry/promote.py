@@ -252,7 +252,11 @@ def _write_pointer(stage: Path, snapshot: str) -> None:
 
 
 def _ensure_nonempty_snapshot(
-    stage: Path, snapshot: str, *, require_bootstrap_packages: bool
+    stage: Path,
+    snapshot: str,
+    *,
+    bootstrap_indexes: tuple[Path, ...],
+    require_bootstrap_packages: bool,
 ) -> None:
     index_root = stage / "public" / "s" / snapshot / "index"
     if not index_root.exists() or index_root.is_symlink() or not index_root.is_dir():
@@ -269,14 +273,11 @@ def _ensure_nonempty_snapshot(
         raise PromotionError(f"snapshot is empty: {snapshot}")
     if not require_bootstrap_packages:
         return
-    bootstrap_root = stage / "bootstrap"
-    bootstrap_indexes = tuple(bootstrap_root.glob("*.json"))
     package_count = 0
     try:
         for bootstrap_path in bootstrap_indexes:
-            rendered_path = index_root / bootstrap_path.name
-            rendered = PackageIndex.model_validate_json(rendered_path.read_bytes())
-            package_count += len(rendered.packages)
+            source = PackageIndex.model_validate_json(bootstrap_path.read_bytes())
+            package_count += len(source.packages)
     except (OSError, ValidationError, ValueError) as exc:
         raise PromotionError(
             f"could not validate bootstrap-backed snapshot {snapshot}: {exc}"
@@ -373,10 +374,16 @@ def _ensure_parent(
         current /= part
         if current.is_symlink() or (current.exists() and not current.is_dir()):
             raise PromotionError(f"transaction parent is not a directory: {current}")
-        existed = current.exists()
-        current.mkdir(exist_ok=True)
-        if not existed and created_dirs is not None:
-            created_dirs.append(current)
+        try:
+            current.mkdir(exist_ok=False)
+        except FileExistsError:
+            if current.is_symlink() or not current.is_dir():
+                raise PromotionError(
+                    f"transaction parent is not a directory: {current}"
+                ) from None
+        else:
+            if created_dirs is not None:
+                created_dirs.append(current)
 
 
 def _replace_file(
@@ -524,14 +531,17 @@ def _install_transaction(
     if not mutable:
         return
 
-    prior = {relative: _prior_file(repo / relative) for relative in _MUTABLE_PATHS}
     moving = tuple(
         relative
         for relative in ("public/registry.json", "public/v1/snapshots.json")
         if relative in mutable
     )
     pointer = "pointers/latest.json"
+    prior: dict[str, bytes | None] = {}
+    prior_complete = False
     try:
+        prior = {relative: _prior_file(repo / relative) for relative in _MUTABLE_PATHS}
+        prior_complete = True
         # Publish the moving pair before the internal pointer.  If the pointer
         # write fails, the pair is restored, leaving the old selection intact.
         for relative in moving:
@@ -552,8 +562,9 @@ def _install_transaction(
             )
     except (OSError, PromotionError) as exc:
         try:
-            for relative, previous in prior.items():
-                _restore_file(repo, repo / relative, previous, relative)
+            if prior_complete:
+                for relative, previous in prior.items():
+                    _restore_file(repo, repo / relative, previous, relative)
         except PromotionError as rollback_error:
             _rollback_created(created_files, created_dirs)
             raise PromotionError(
@@ -577,12 +588,16 @@ def _transaction(
     stage = _stage_repository(repo)
     release_path: str | None = None
     try:
+        staged_bootstrap_indexes = _bootstrap_indexes(stage / "bootstrap")
         if release is not None:
             release_path = f"releases/gel-cli/{release.version}.json"
             _prepare_release(stage, release)
         snapshot = build_snapshot(stage)
         _ensure_nonempty_snapshot(
-            stage, snapshot, require_bootstrap_packages=release is None
+            stage,
+            snapshot,
+            bootstrap_indexes=staged_bootstrap_indexes,
+            require_bootstrap_packages=release is None,
         )
         _write_pointer(stage, snapshot)
         select_snapshot(stage)
