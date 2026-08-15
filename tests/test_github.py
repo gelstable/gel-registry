@@ -250,6 +250,16 @@ def test_download_assets_strips_credentials_on_cross_origin_redirect(
                     )
                 },
             )
+        if request.url.path == "/downloaded-asset":
+            return httpx.Response(
+                302,
+                headers={
+                    "Location": (
+                        "https://release-assets.githubusercontent.com/"
+                        "downloaded-asset-final"
+                    )
+                },
+            )
         return httpx.Response(200, content=b"asset")
 
     with httpx.Client(

@@ -522,10 +522,9 @@ def _safe_cross_origin_stream(
 def _asset_stream(
     client: httpx.Client,
     url: str,
-    previous_url: str,
-    redirect_count: int,
+    strip_credentials: bool,
 ) -> AbstractContextManager[httpx.Response]:
-    if redirect_count and _request_origin(url) != _request_origin(previous_url):
+    if strip_credentials:
         return closing(_safe_cross_origin_stream(client, url))
     return client.stream(
         "GET",
@@ -602,11 +601,10 @@ def download_assets(
             _validate_delivery_url(url)
             target = stage / asset.name
             try:
-                previous_url = url
+                original_origin = _request_origin(url)
+                strip_credentials = False
                 for redirect_count in range(_MAX_REDIRECTS + 1):
-                    response_context = _asset_stream(
-                        client, url, previous_url, redirect_count
-                    )
+                    response_context = _asset_stream(client, url, strip_credentials)
                     with response_context as response:
                         response_url = str(response.url)
                         _validate_delivery_url(response_url)
@@ -620,9 +618,12 @@ def download_assets(
                                 raise GitHubError(
                                     f"asset {asset.name!r} redirect limit exceeded"
                                 )
-                            previous_url = response_url
                             url = urljoin(response_url, location)
                             _validate_delivery_url(url)
+                            strip_credentials = (
+                                strip_credentials
+                                or _request_origin(url) != original_origin
+                            )
                             continue
                         if response.status_code != 200:
                             raise GitHubError(
