@@ -7,8 +7,9 @@ from urllib.parse import urljoin
 
 import pytest
 
+import gel_registry.normalize as normalize_module
 from gel_registry.constants import CAPTURE_ID, ORIGIN, capture_urls
-from gel_registry.digest import canonical_json, hash_bytes
+from gel_registry.digest import Digests, canonical_json, hash_bytes
 from gel_registry.normalize import (
     NormalizationError,
     normalize_capture,
@@ -224,6 +225,41 @@ def test_normalize_capture_rejects_digest_mismatch_without_partial_output(
         normalize_capture(capture_root, output_root)
 
     assert not output_root.exists()
+
+
+def test_normalize_capture_parses_only_the_verified_body_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_body = _fixture_body()
+    changed_data = json.loads(original_body)
+    assert isinstance(changed_data, dict)
+    changed_packages = changed_data["packages"]
+    assert isinstance(changed_packages, list)
+    changed_package = changed_packages[0]
+    assert isinstance(changed_package, dict)
+    changed_tags = changed_package["tags"]
+    assert isinstance(changed_tags, dict)
+    changed_tags["featured"] = False
+    changed_body = json.dumps(changed_data, indent=2).encode() + b"\n"
+
+    capture_root = tmp_path / "capture"
+    _write_capture(capture_root, original_body)
+    body_path = capture_root / "indexes/stable-x86_64-unknown-linux-gnu.json"
+    real_hash_bytes = hash_bytes
+
+    def replace_after_verification(data: bytes) -> Digests:
+        digests = real_hash_bytes(data)
+        body_path.write_bytes(changed_body)
+        return digests
+
+    monkeypatch.setattr(normalize_module, "hash_bytes", replace_after_verification)
+    output_root = tmp_path / "bootstrap"
+
+    paths = normalize_capture(capture_root, output_root)
+
+    normalized = PackageIndex.model_validate_json(paths[0].read_bytes())
+    assert normalized.packages[0].tags["featured"] is True
 
 
 def test_normalize_capture_rejects_extra_unrecorded_body_atomically(

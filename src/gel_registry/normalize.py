@@ -14,7 +14,7 @@ from urllib.parse import urljoin, urlsplit
 from pydantic import ValidationError
 
 from .constants import CAPTURE_ID, ORIGIN
-from .digest import canonical_json, hash_file
+from .digest import canonical_json, hash_bytes
 from .schema import CaptureManifest, PackageIndex
 
 _RENAME_EXCL = 0x00000004
@@ -142,9 +142,12 @@ def _verify_capture_tree(capture_root: Path, manifest: CaptureManifest) -> None:
         )
 
 
-def _verify_body_hashes(capture_root: Path, manifest: CaptureManifest) -> None:
-    """Check every recorded body before attempting to parse any JSON."""
+def _verify_body_hashes(
+    capture_root: Path, manifest: CaptureManifest
+) -> dict[str, bytes]:
+    """Read and verify every body before attempting to parse any JSON."""
 
+    snapshots: dict[str, bytes] = {}
     for entry in manifest.entries:
         if entry.status == 404:
             continue
@@ -155,11 +158,12 @@ def _verify_body_hashes(capture_root: Path, manifest: CaptureManifest) -> None:
                 f"{entry.channel}/{entry.platform}: missing captured body {entry.path}"
             )
         try:
-            digests = hash_file(body_path)
+            body = body_path.read_bytes()
         except OSError as exc:
             raise NormalizationError(
-                f"{entry.channel}/{entry.platform}: could not hash {entry.path}: {exc}"
+                f"{entry.channel}/{entry.platform}: could not read {entry.path}: {exc}"
             ) from exc
+        digests = hash_bytes(body)
         if (
             digests.size != entry.size
             or digests.sha256 != entry.sha256
@@ -171,6 +175,8 @@ def _verify_body_hashes(capture_root: Path, manifest: CaptureManifest) -> None:
                 f"blake2b={entry.blake2b}; observed size={digests.size} "
                 f"sha256={digests.sha256} blake2b={digests.blake2b})"
             )
+        snapshots[entry.path] = body
+    return snapshots
 
 
 def _resolve_installref(base_url: str, reference: str, label: str) -> str:
@@ -198,10 +204,10 @@ def _resolve_installref(base_url: str, reference: str, label: str) -> str:
     return resolved
 
 
-def _normalize_index(body_path: Path, entry_url: str, label: str) -> PackageIndex:
+def _normalize_index(body: bytes, entry_url: str, label: str) -> PackageIndex:
     try:
-        index = PackageIndex.model_validate_json(body_path.read_bytes())
-    except (OSError, ValidationError, ValueError) as exc:
+        index = PackageIndex.model_validate_json(body)
+    except (ValidationError, ValueError) as exc:
         raise NormalizationError(
             f"{label}: captured body is not a package index: {exc}"
         ) from exc
@@ -239,7 +245,7 @@ def _normalize_index(body_path: Path, entry_url: str, label: str) -> PackageInde
 def _normalize_to_stage(capture_root: Path, stage: Path) -> tuple[str, ...]:
     manifest = _load_manifest(capture_root)
     _verify_capture_tree(capture_root, manifest)
-    _verify_body_hashes(capture_root, manifest)
+    body_snapshots = _verify_body_hashes(capture_root, manifest)
 
     output_names: list[str] = []
     for entry in manifest.entries:
@@ -247,7 +253,7 @@ def _normalize_to_stage(capture_root: Path, stage: Path) -> tuple[str, ...]:
             continue
         assert entry.path is not None
         label = f"{entry.channel}/{entry.platform}"
-        index = _normalize_index(capture_root / entry.path, entry.url, label)
+        index = _normalize_index(body_snapshots[entry.path], entry.url, label)
         output_name = f"{entry.channel}-{entry.platform}.json"
         (stage / output_name).write_bytes(canonical_json(index))
         output_names.append(output_name)
