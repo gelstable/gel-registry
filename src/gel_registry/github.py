@@ -10,6 +10,7 @@ import shutil
 import sys
 import tempfile
 from collections.abc import Iterable, Mapping
+from contextlib import AbstractContextManager, closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -488,6 +489,53 @@ def _validate_delivery_url(url: str) -> None:
         raise GitHubError(f"asset redirect leaves GitHub delivery origins: {url!r}")
 
 
+def _request_origin(url: str) -> tuple[str, str, int | None]:
+    parsed = urlsplit(url)
+    port = parsed.port
+    if port == 443:
+        port = None
+    return (parsed.scheme, parsed.hostname or "", port)
+
+
+def _safe_cross_origin_stream(
+    client: httpx.Client,
+    url: str,
+) -> httpx.Response:
+    """Prepare a request without credentials for a different origin."""
+
+    request = client.build_request(
+        "GET",
+        url,
+        headers=_ASSET_HEADERS,
+        timeout=_REQUEST_TIMEOUT,
+    )
+    for header in ("Authorization", "Proxy-Authorization", "Cookie"):
+        if header in request.headers:
+            del request.headers[header]
+    return client.send(
+        request,
+        stream=True,
+        follow_redirects=False,
+    )
+
+
+def _asset_stream(
+    client: httpx.Client,
+    url: str,
+    previous_url: str,
+    redirect_count: int,
+) -> AbstractContextManager[httpx.Response]:
+    if redirect_count and _request_origin(url) != _request_origin(previous_url):
+        return closing(_safe_cross_origin_stream(client, url))
+    return client.stream(
+        "GET",
+        url,
+        headers=_ASSET_HEADERS,
+        follow_redirects=False,
+        timeout=_REQUEST_TIMEOUT,
+    )
+
+
 def _rename_noreplace(source: Path, destination: Path) -> None:
     source_bytes = os.fsencode(str(source))
     destination_bytes = os.fsencode(str(destination))
@@ -554,14 +602,12 @@ def download_assets(
             _validate_delivery_url(url)
             target = stage / asset.name
             try:
+                previous_url = url
                 for redirect_count in range(_MAX_REDIRECTS + 1):
-                    with client.stream(
-                        "GET",
-                        url,
-                        headers=_ASSET_HEADERS,
-                        follow_redirects=False,
-                        timeout=_REQUEST_TIMEOUT,
-                    ) as response:
+                    response_context = _asset_stream(
+                        client, url, previous_url, redirect_count
+                    )
+                    with response_context as response:
                         response_url = str(response.url)
                         _validate_delivery_url(response_url)
                         if response.status_code in _REDIRECT_STATUSES:
@@ -574,6 +620,7 @@ def download_assets(
                                 raise GitHubError(
                                     f"asset {asset.name!r} redirect limit exceeded"
                                 )
+                            previous_url = response_url
                             url = urljoin(response_url, location)
                             _validate_delivery_url(url)
                             continue

@@ -223,6 +223,59 @@ def test_download_assets_rejects_unsafe_redirects(
     assert not (tmp_path / "assets").exists()
 
 
+def test_download_assets_strips_credentials_on_cross_origin_redirect(
+    tmp_path: Path,
+) -> None:
+    release = discover_cli_releases(
+        _client(lambda request: httpx.Response(200, json=[_release()])),
+        known_versions=(),
+    )[0]
+    observations: list[tuple[str, str | None, str | None, str | None]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observations.append(
+            (
+                request.url.host or "",
+                request.headers.get("Authorization"),
+                request.headers.get("Proxy-Authorization"),
+                request.headers.get("Cookie"),
+            )
+        )
+        if request.url.host == "api.github.com":
+            return httpx.Response(
+                302,
+                headers={
+                    "Location": (
+                        "https://release-assets.githubusercontent.com/downloaded-asset"
+                    )
+                },
+            )
+        return httpx.Response(200, content=b"asset")
+
+    with httpx.Client(
+        headers={
+            "Authorization": "Bearer secret",
+            "Proxy-Authorization": "Basic proxy-secret",
+            "Cookie": "session=secret",
+        },
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        download_assets(client, release, tmp_path / "assets")
+
+    api_observations = [item for item in observations if item[0] == "api.github.com"]
+    cdn_observations = [
+        item
+        for item in observations
+        if item[0] == "release-assets.githubusercontent.com"
+    ]
+    assert api_observations and cdn_observations
+    assert all(
+        item[1:] == ("Bearer secret", "Basic proxy-secret", "session=secret")
+        for item in api_observations
+    )
+    assert all(item[1:] == (None, None, None) for item in cdn_observations)
+
+
 def test_download_assets_preserves_raced_destination_and_rejects_symlink(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
