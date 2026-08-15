@@ -234,7 +234,12 @@ def test_release_record_requires_semver_without_leading_v() -> None:
 
 @pytest.mark.parametrize(
     ("version", "valid"),
-    [("1.2.3-01", False), ("1.2.3-alpha.01", False), ("1.2.3-foo+bar", True)],
+    [
+        ("1.2.3-01", False),
+        ("1.2.3-alpha.01", False),
+        ("1.2.3١", False),
+        ("1.2.3-foo+bar", True),
+    ],
 )
 def test_release_record_applies_exact_semver_prerelease_rules(
     version: str, valid: bool
