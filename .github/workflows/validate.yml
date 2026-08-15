@@ -1,0 +1,157 @@
+name: Registry validation
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      rehearsal: ${{ steps.changed.outputs.rehearsal }}
+      release: ${{ steps.changed.outputs.release }}
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Identify scoped remote checks
+        id: changed
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          base="$(git merge-base HEAD "refs/remotes/origin/$BASE_REF")"
+          changed="$(git diff --name-only "$base" HEAD)"
+          rehearsal=false
+          release=false
+          if grep -Eq '^(upstream/packages\.geldata\.com/|bootstrap/|pointers/latest\.json$|public/)' <<<"$changed"; then
+            rehearsal=true
+          fi
+          if grep -Eq '^releases/gel-cli/[^/]+\.json$' <<<"$changed"; then
+            release=true
+          fi
+          echo "rehearsal=$rehearsal" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+  local:
+    needs: scope
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.6"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Materialize the merge base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          base="$(git merge-base HEAD "refs/remotes/origin/$BASE_REF")"
+          tree="$RUNNER_TEMP/gel-registry-merge-base"
+          mkdir -p "$tree"
+          git archive "$base" | tar -x -C "$tree"
+          echo "BASE_TREE=$tree" >> "$GITHUB_ENV"
+
+      - name: Run locked static checks and tests
+        run: |
+          set -euo pipefail
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy src tests
+          uv run pytest -q
+
+      - name: Check normalization drift
+        run: uv run gel-registry normalize --repo . --check
+
+      - name: Check render drift and immutable history
+        run: uv run gel-registry validate --repo . --base "$BASE_TREE"
+
+  capture-rehearsal:
+    needs: [scope, local]
+    if: needs.scope.outputs.rehearsal == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.6"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Run the explicit live capture rehearsal
+        run: uv run gel-registry verify-capture-live --repo .
+
+  release-remotes:
+    needs: [scope, local]
+    if: needs.scope.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.6"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Verify only newly added release records remotely
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          base="$(git merge-base HEAD "refs/remotes/origin/$BASE_REF")"
+          mapfile -t records < <(
+            git diff --diff-filter=A --name-only "$base" HEAD -- 'releases/gel-cli/*.json'
+          )
+          if (( ${#records[@]} == 0 )); then
+            echo "no newly added Gel CLI release records"
+            exit 0
+          fi
+          args=()
+          for record in "${records[@]}"; do
+            args+=(--remote-release "$record")
+          done
+          uv run gel-registry validate --repo . "${args[@]}"
