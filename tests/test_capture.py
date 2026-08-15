@@ -328,6 +328,19 @@ def test_capture_legacy_refuses_to_overwrite_existing_destination(
     assert not httpx_mock.get_requests()
 
 
+def test_capture_legacy_rejects_nul_destination_without_truncating_target(
+    httpx_mock: HTTPXMock,
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "published\x00ignored"
+
+    with httpx.Client() as client, pytest.raises(CaptureError, match="NUL|null"):
+        capture_legacy(client, destination, CAPTURED_AT)
+
+    assert not (tmp_path / "published").exists()
+    assert not httpx_mock.get_requests()
+
+
 def test_verify_live_capture_requires_current_status_and_exact_bytes(
     httpx_mock: HTTPXMock,
     tmp_path: Path,

@@ -201,11 +201,18 @@ def _conditional_headers(entry: CaptureEntry) -> tuple[str, str] | None:
     return None
 
 
+def _encoded_path(path: Path) -> bytes:
+    encoded = os.fsencode(str(path))
+    if b"\x00" in encoded:
+        raise ValueError("capture path contains an embedded NUL byte")
+    return encoded
+
+
 def _rename_noreplace(source: Path, destination: Path) -> None:
     """Atomically rename a directory without replacing a destination."""
 
-    source_bytes = os.fsencode(str(source))
-    destination_bytes = os.fsencode(str(destination))
+    source_bytes = _encoded_path(source)
+    destination_bytes = _encoded_path(destination)
     libc = ctypes.CDLL(None, use_errno=True)
     if sys.platform == "darwin":
         try:
@@ -334,6 +341,10 @@ def capture_legacy(
 ) -> CaptureManifest:
     """Capture the fixed 24-entry legacy matrix into a new immutable root."""
 
+    try:
+        _encoded_path(destination)
+    except ValueError as exc:
+        raise CaptureError(str(exc)) from exc
     if destination.exists() or destination.is_symlink():
         raise CaptureError(f"capture destination already exists: {destination}")
 
