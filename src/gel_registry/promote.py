@@ -22,7 +22,7 @@ from pydantic import ValidationError
 from .digest import canonical_json
 from .normalize import _rename_noreplace
 from .render import RenderError, build_snapshot, select_snapshot
-from .schema import Pointer, ReleaseRecord
+from .schema import PackageIndex, Pointer, ReleaseRecord
 
 
 class PromotionError(RuntimeError):
@@ -251,7 +251,9 @@ def _write_pointer(stage: Path, snapshot: str) -> None:
         raise PromotionError(f"could not stage latest pointer {path}: {exc}") from exc
 
 
-def _ensure_nonempty_snapshot(stage: Path, snapshot: str) -> None:
+def _ensure_nonempty_snapshot(
+    stage: Path, snapshot: str, *, require_bootstrap_packages: bool
+) -> None:
     index_root = stage / "public" / "s" / snapshot / "index"
     if not index_root.exists() or index_root.is_symlink() or not index_root.is_dir():
         raise PromotionError(f"snapshot is empty: {snapshot}")
@@ -265,6 +267,22 @@ def _ensure_nonempty_snapshot(stage: Path, snapshot: str) -> None:
         raise PromotionError(f"could not inspect snapshot {snapshot}: {exc}") from exc
     if not indexes:
         raise PromotionError(f"snapshot is empty: {snapshot}")
+    if not require_bootstrap_packages:
+        return
+    bootstrap_root = stage / "bootstrap"
+    bootstrap_indexes = tuple(bootstrap_root.glob("*.json"))
+    package_count = 0
+    try:
+        for bootstrap_path in bootstrap_indexes:
+            rendered_path = index_root / bootstrap_path.name
+            rendered = PackageIndex.model_validate_json(rendered_path.read_bytes())
+            package_count += len(rendered.packages)
+    except (OSError, ValidationError, ValueError) as exc:
+        raise PromotionError(
+            f"could not validate bootstrap-backed snapshot {snapshot}: {exc}"
+        ) from exc
+    if package_count == 0:
+        raise PromotionError(f"snapshot contains no bootstrap packages: {snapshot}")
 
 
 def _is_mutable(relative: str) -> bool:
@@ -343,7 +361,9 @@ def _compare_transaction(
     return tuple(sorted(changed))
 
 
-def _ensure_parent(repo: Path, path: Path) -> None:
+def _ensure_parent(
+    repo: Path, path: Path, created_dirs: list[Path] | None = None
+) -> None:
     try:
         relative_parent = path.parent.relative_to(repo)
     except ValueError as exc:
@@ -353,13 +373,22 @@ def _ensure_parent(repo: Path, path: Path) -> None:
         current /= part
         if current.is_symlink() or (current.exists() and not current.is_dir()):
             raise PromotionError(f"transaction parent is not a directory: {current}")
+        existed = current.exists()
         current.mkdir(exist_ok=True)
+        if not existed and created_dirs is not None:
+            created_dirs.append(current)
 
 
-def _replace_file(repo: Path, path: Path, data: bytes, label: str) -> None:
+def _replace_file(
+    repo: Path,
+    path: Path,
+    data: bytes,
+    label: str,
+    created_dirs: list[Path] | None = None,
+) -> None:
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise PromotionError(f"{label} is not a regular file: {path}")
-    _ensure_parent(repo, path)
+    _ensure_parent(repo, path, created_dirs)
     temporary: Path | None = None
     try:
         fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
@@ -379,10 +408,16 @@ def _replace_file(repo: Path, path: Path, data: bytes, label: str) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def _create_file(repo: Path, path: Path, data: bytes, label: str) -> bool:
+def _create_file(
+    repo: Path,
+    path: Path,
+    data: bytes,
+    label: str,
+    created_dirs: list[Path] | None = None,
+) -> bool:
     """Create an immutable file without replacing a raced destination."""
 
-    _ensure_parent(repo, path)
+    _ensure_parent(repo, path, created_dirs)
     if path.is_symlink() or path.exists():
         if path.is_file() and path.read_bytes() == data:
             return False
@@ -435,6 +470,30 @@ def _restore_file(repo: Path, path: Path, previous: bytes | None, label: str) ->
     _replace_file(repo, path, previous, label)
 
 
+def _rollback_created(
+    created_files: list[tuple[Path, bytes]], created_dirs: list[Path]
+) -> None:
+    """Remove only files and directories created by this invocation."""
+
+    for path, expected in reversed(created_files):
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            if path.read_bytes() == expected:
+                path.unlink()
+        except OSError:
+            continue
+    for path in sorted(
+        set(created_dirs), key=lambda item: len(item.parts), reverse=True
+    ):
+        try:
+            if path.is_dir() and not path.is_symlink():
+                path.rmdir()
+        except OSError:
+            # A raced/preexisting child keeps the directory in place.
+            continue
+
+
 def _install_transaction(
     repo: Path,
     stage: Path,
@@ -443,17 +502,24 @@ def _install_transaction(
     changed = tuple(sorted(changed_paths))
     immutable = tuple(path for path in changed if not _is_mutable(path))
     mutable = tuple(path for path in changed if _is_mutable(path))
+    created_files: list[tuple[Path, bytes]] = []
+    created_dirs: list[Path] = []
 
-    for relative in immutable:
-        source = stage / relative
-        target = repo / relative
-        try:
-            data = source.read_bytes()
-        except OSError as exc:
-            raise PromotionError(
-                f"could not read staged path {relative}: {exc}"
-            ) from exc
-        _create_file(repo, target, data, relative)
+    try:
+        for relative in immutable:
+            source = stage / relative
+            target = repo / relative
+            try:
+                data = source.read_bytes()
+            except OSError as exc:
+                raise PromotionError(
+                    f"could not read staged path {relative}: {exc}"
+                ) from exc
+            if _create_file(repo, target, data, relative, created_dirs):
+                created_files.append((target, data))
+    except PromotionError:
+        _rollback_created(created_files, created_dirs)
+        raise
 
     if not mutable:
         return
@@ -470,7 +536,11 @@ def _install_transaction(
         # write fails, the pair is restored, leaving the old selection intact.
         for relative in moving:
             _replace_file(
-                repo, repo / relative, (stage / relative).read_bytes(), relative
+                repo,
+                repo / relative,
+                (stage / relative).read_bytes(),
+                relative,
+                created_dirs,
             )
         if pointer in mutable:
             _replace_file(
@@ -478,15 +548,18 @@ def _install_transaction(
                 repo / pointer,
                 (stage / pointer).read_bytes(),
                 pointer,
+                created_dirs,
             )
     except (OSError, PromotionError) as exc:
         try:
             for relative, previous in prior.items():
                 _restore_file(repo, repo / relative, previous, relative)
         except PromotionError as rollback_error:
+            _rollback_created(created_files, created_dirs)
             raise PromotionError(
                 f"publication failed and rollback failed: {rollback_error}"
             ) from exc
+        _rollback_created(created_files, created_dirs)
         raise
 
 
@@ -508,7 +581,9 @@ def _transaction(
             release_path = f"releases/gel-cli/{release.version}.json"
             _prepare_release(stage, release)
         snapshot = build_snapshot(stage)
-        _ensure_nonempty_snapshot(stage, snapshot)
+        _ensure_nonempty_snapshot(
+            stage, snapshot, require_bootstrap_packages=release is None
+        )
         _write_pointer(stage, snapshot)
         select_snapshot(stage)
         changed_paths = _compare_transaction(

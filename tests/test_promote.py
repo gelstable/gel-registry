@@ -93,6 +93,19 @@ def test_publish_bootstrap_refuses_missing_indexes(tmp_path: Path) -> None:
         publish_bootstrap(tmp_path)
 
 
+def test_publish_bootstrap_refuses_zero_package_indexes(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    package_index_data["packages"] = []
+    _write_bootstrap(tmp_path, package_index_data)
+
+    with pytest.raises(PromotionError, match="no bootstrap packages"):
+        publish_bootstrap(tmp_path)
+
+    assert not (tmp_path / "pointers").exists()
+    assert not (tmp_path / "public").exists()
+
+
 def test_promote_release_writes_record_and_composes_bootstrap(
     tmp_path: Path, package_index_data: dict[str, object]
 ) -> None:
@@ -217,6 +230,65 @@ def test_render_failure_is_staged_before_working_tree_mutation(
         for path in tmp_path.rglob("*")
         if path.is_file()
     } == before
+
+
+@pytest.mark.parametrize("failure_call", [1, 3, 99])
+def test_immutable_install_failure_rolls_back_new_files(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    failure_call: int,
+) -> None:
+    _write_bootstrap(tmp_path, package_index_data)
+    real_create = promote_module._create_file
+    calls = 0
+
+    def fail_create(*args: object, **kwargs: object) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == failure_call:
+            raise PromotionError("injected immutable install failure")
+        return real_create(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(promote_module, "_create_file", fail_create)
+    if failure_call == 99:
+        promote_release(tmp_path, _release())
+    else:
+        with pytest.raises(PromotionError, match="injected"):
+            promote_release(tmp_path, _release())
+
+    if failure_call != 99:
+        assert not (tmp_path / "releases").exists()
+        assert not (tmp_path / "public").exists()
+        assert not (tmp_path / "pointers").exists()
+
+
+@pytest.mark.parametrize("fail_label", ["public/registry.json", "pointers/latest.json"])
+def test_mutable_install_failure_rolls_back_new_immutable_files(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    fail_label: str,
+) -> None:
+    _write_bootstrap(tmp_path, package_index_data)
+    real_replace = promote_module._replace_file
+    failed = False
+
+    def fail_replace(*args: object, **kwargs: object) -> None:
+        nonlocal failed
+        label = args[3]
+        if not failed and label == fail_label:
+            failed = True
+            raise PromotionError("injected mutable install failure")
+        real_replace(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(promote_module, "_replace_file", fail_replace)
+    with pytest.raises(PromotionError, match="injected"):
+        promote_release(tmp_path, _release())
+
+    assert not (tmp_path / "releases").exists()
+    assert not (tmp_path / "public").exists()
+    assert not (tmp_path / "pointers").exists()
 
 
 def test_branch_names_are_deterministic(
