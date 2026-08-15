@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path, PurePosixPath
 
 import pytest
 
+import gel_registry.render as render_module
 from gel_registry.constants import CLI_PLATFORMS, LEGACY_PLATFORMS
 from gel_registry.digest import canonical_json, snapshot_id
 from gel_registry.render import (
@@ -181,6 +183,28 @@ def test_build_refuses_to_overwrite_mutated_existing_snapshot(tmp_path: Path) ->
         build_snapshot(tmp_path)
 
 
+def test_build_uses_no_replace_when_snapshot_destination_races(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _copy_release(tmp_path)
+    snapshot = build_snapshot(tmp_path)
+    destination = tmp_path / "public" / "s" / snapshot
+    shutil.rmtree(destination)
+    real_rename = render_module._rename_noreplace  # type: ignore[attr-defined]
+
+    def create_destination_then_rename(source: Path, target: Path) -> None:
+        target.mkdir(parents=True)
+        real_rename(source, target)
+
+    monkeypatch.setattr(
+        render_module, "_rename_noreplace", create_destination_then_rename
+    )
+    with pytest.raises(RenderError, match="immutable|mismatch"):
+        build_snapshot(tmp_path)
+    assert destination.is_dir()
+    assert not (destination / "registry.json").exists()
+
+
 def test_selection_is_pointer_driven_and_rollback_preserves_pinned_trees(
     tmp_path: Path,
 ) -> None:
@@ -220,6 +244,70 @@ def test_selection_is_pointer_driven_and_rollback_preserves_pinned_trees(
         if path.is_file()
     }
     assert pinned_after == pinned_before
+
+
+def test_selection_preflights_both_moving_targets_before_mutation(
+    tmp_path: Path,
+) -> None:
+    _copy_release(tmp_path)
+    snapshot = build_snapshot(tmp_path)
+    _write_pointer(tmp_path, snapshot)
+    select_snapshot(tmp_path)
+    prior_root = (tmp_path / "public" / "registry.json").read_bytes()
+    listing = tmp_path / "public" / "v1" / "snapshots.json"
+    listing.unlink()
+    listing.mkdir()
+
+    with pytest.raises(RenderError):
+        select_snapshot(tmp_path)
+    assert (tmp_path / "public" / "registry.json").read_bytes() == prior_root
+
+
+def test_selection_restores_first_document_when_second_write_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _copy_release(tmp_path, "1.0.0")
+    old = build_snapshot(tmp_path)
+    (tmp_path / "releases" / "gel-cli" / "1.0.0.json").unlink()
+    _copy_release(tmp_path, "2.0.0")
+    new = build_snapshot(tmp_path)
+    _write_pointer(tmp_path, old)
+    select_snapshot(tmp_path)
+    root_path = tmp_path / "public" / "registry.json"
+    listing_path = tmp_path / "public" / "v1" / "snapshots.json"
+    prior_root = root_path.read_bytes()
+    prior_listing = listing_path.read_bytes()
+    _write_pointer(tmp_path, new)
+    real_replace = render_module._atomic_replace
+
+    def fail_listing(path: Path, data: bytes, label: str) -> None:
+        if path == listing_path:
+            raise RenderError("injected second publication failure")
+        real_replace(path, data, label)
+
+    monkeypatch.setattr(render_module, "_atomic_replace", fail_listing)
+    with pytest.raises(RenderError, match="injected"):
+        select_snapshot(tmp_path)
+    assert root_path.read_bytes() == prior_root
+    assert listing_path.read_bytes() == prior_listing
+
+
+def test_promoted_at_does_not_enter_rendered_package_or_snapshot_identity(
+    tmp_path: Path,
+) -> None:
+    release = _copy_release(tmp_path)
+    first = build_snapshot(tmp_path)
+    first_index = next((tmp_path / "public" / "s" / first / "index").glob("*.json"))
+    first_bytes = first_index.read_bytes()
+    data = json.loads(release.read_text())
+    data["promoted_at"] = "2036-08-15T12:00:00Z"
+    release.write_bytes(canonical_json(data))
+
+    second = build_snapshot(tmp_path)
+    assert second == first
+    assert first_index.read_bytes() == first_bytes
+    assert b"2026-08-15T12:00:00" not in first_bytes
+    assert b"2036-08-15T12:00:00" not in first_bytes
 
 
 @pytest.mark.parametrize(

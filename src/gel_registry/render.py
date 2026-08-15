@@ -9,6 +9,7 @@ pinned tree.
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 import shutil
@@ -24,6 +25,7 @@ from pydantic import BaseModel, ValidationError
 
 from .constants import CHANNELS, CLI_PLATFORMS, LEGACY_PLATFORMS
 from .digest import canonical_json, snapshot_id
+from .normalize import _rename_noreplace
 from .schema import (
     CaptureManifest,
     InstallRef,
@@ -200,7 +202,10 @@ def _release_package(record: ReleaseRecord, platform: str) -> PackageEntry:
         version_details=_version_details(record.version),
         version_key=record.version,
         revision=str(record.source.release_id),
-        build_date=record.promoted_at.isoformat(),
+        # ``promoted_at`` is review bookkeeping, not package provenance.  The
+        # release tag is stable source metadata and keeps rendered bytes
+        # independent of when the record was promoted.
+        build_date=record.source.release_tag,
         architecture=platform.split("-", 1)[0],
         slot="",
         tags={},
@@ -333,15 +338,15 @@ def _install_directory(stage: Path, destination: Path, label: str) -> None:
         return
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        os.rename(stage, destination)
-    except FileExistsError:
+        _rename_noreplace(stage, destination)
+    except OSError as exc:
+        if exc.errno != errno.EEXIST:
+            raise RenderError(f"could not install immutable {label}: {exc}") from exc
         _directory(destination, label)
         _verify_tree(stage, destination, label)
-    except OSError as exc:
-        raise RenderError(f"could not install immutable {label}: {exc}") from exc
 
 
-def _atomic_replace(path: Path, data: bytes, label: str) -> None:
+def _atomic_replace_impl(path: Path, data: bytes, label: str) -> None:
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise RenderError(f"{label} is not a regular file: {path}")
     parent = path.parent
@@ -363,6 +368,87 @@ def _atomic_replace(path: Path, data: bytes, label: str) -> None:
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _atomic_replace(path: Path, data: bytes, label: str) -> None:
+    """Replace one regular file atomically.
+
+    This small wrapper is kept separate from the implementation so selection
+    can restore a prior moving pair even when a test or caller injects a
+    failure into one publication call.
+    """
+
+    _atomic_replace_impl(path, data, label)
+
+
+def _preflight_target(path: Path, label: str) -> None:
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise RenderError(f"{label} is not a regular file: {path}")
+    parent = path.parent
+    if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+        raise RenderError(f"{label} parent is not a directory: {parent}")
+    parent.mkdir(parents=True, exist_ok=True)
+
+
+def _prior_bytes(path: Path) -> bytes | None:
+    if not path.exists():
+        return None
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise RenderError(
+            f"could not read prior moving document {path}: {exc}"
+        ) from exc
+
+
+def _restore_target(path: Path, previous: bytes | None, label: str) -> None:
+    if previous is None:
+        if path.exists() or path.is_symlink():
+            if path.is_symlink() or not path.is_file():
+                raise RenderError(f"cannot remove non-file moving document: {path}")
+            try:
+                path.unlink()
+            except OSError as exc:
+                raise RenderError(
+                    f"could not restore moving document {path}: {exc}"
+                ) from exc
+        return
+    if path.exists() and path.is_file() and path.read_bytes() == previous:
+        return
+    _atomic_replace_impl(path, previous, label)
+
+
+def _publish_moving_pair(
+    root_path: Path,
+    root_bytes: bytes,
+    listing_path: Path,
+    listing_bytes: bytes,
+) -> None:
+    """Publish the two moving documents as a failure-safe pair.
+
+    There is no single portable filesystem primitive that atomically switches
+    two independent files.  Both targets are therefore preflighted before any
+    mutation, and if the second replacement fails the first is restored from
+    its captured prior bytes.
+    """
+
+    _preflight_target(root_path, "moving root")
+    _preflight_target(listing_path, "snapshot listing")
+    prior_root = _prior_bytes(root_path)
+    prior_listing = _prior_bytes(listing_path)
+    try:
+        _atomic_replace(root_path, root_bytes, "moving root")
+        _atomic_replace(listing_path, listing_bytes, "snapshot listing")
+    except RenderError as exc:
+        try:
+            _restore_target(root_path, prior_root, "moving root rollback")
+            _restore_target(listing_path, prior_listing, "snapshot listing rollback")
+        except RenderError as rollback_error:
+            raise RenderError(
+                "moving-document publication failed and rollback failed: "
+                f"{rollback_error}"
+            ) from exc
+        raise
 
 
 def build_snapshot(repo: Path) -> str:
@@ -525,11 +611,11 @@ def select_snapshot(repo: Path) -> None:
         )
     )
     listing = SnapshotListing(latest=selected, snapshots=snapshots)
-    _atomic_replace(public / "registry.json", canonical_json(moving), "moving root")
-    _atomic_replace(
+    _publish_moving_pair(
+        public / "registry.json",
+        canonical_json(moving),
         public / "v1" / "snapshots.json",
         canonical_json(listing),
-        "snapshot listing",
     )
 
 
