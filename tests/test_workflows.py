@@ -200,3 +200,25 @@ def test_publication_and_promotion_reruns_fail_closed_or_are_idempotent(
     assert "if ! discovered_tags=" in promotion_text
     assert "could not discover stable Gel CLI releases" in promotion_text
     assert "mapfile -t tags < <(" not in promotion_text
+
+
+def test_retained_writer_branches_reject_unrelated_committed_paths(
+    workflows: dict[str, dict[str, Any]],
+) -> None:
+    expected = {
+        "capture.yml": r"!~ /^(upstream|bootstrap)\//",
+        "publish-bootstrap.yml": r"!~ /^(pointers|public)\//",
+        "promote.yml": r"!~ /^(releases\/gel-cli|pointers|public)\//",
+    }
+    for name, pattern in expected.items():
+        workflow = workflows[name]
+        text = "\n".join(
+            str(step.get("run", ""))
+            for job in workflow["jobs"].values()
+            if isinstance(job, dict)
+            for step in job.get("steps", [])
+            if isinstance(step, dict)
+        )
+        assert 'git diff --name-only "refs/remotes/origin/$DEFAULT_BRANCH"' in text
+        assert "unexpected_branch_paths" in text
+        assert pattern in text

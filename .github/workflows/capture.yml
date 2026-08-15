@@ -71,6 +71,12 @@ jobs:
           if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
             remote_exists=true
             git fetch --no-tags origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            branch_paths="$(git diff --name-only "refs/remotes/origin/$DEFAULT_BRANCH" "refs/remotes/origin/$branch")"
+            unexpected_branch_paths="$(printf '%s\n' "$branch_paths" | awk 'NF && $0 !~ /^(upstream|bootstrap)\//')"
+            if [[ -n "$unexpected_branch_paths" ]]; then
+              echo "remote $branch contains paths outside the capture phase: $unexpected_branch_paths" >&2
+              exit 1
+            fi
             if ! git diff --quiet "refs/remotes/origin/$branch" -- upstream bootstrap; then
               echo "remote $branch contains different capture bytes; inspect that branch before rerunning" >&2
               exit 1

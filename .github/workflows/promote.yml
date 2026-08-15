@@ -41,6 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --no-tags origin "$DEFAULT_BRANCH"
 
           if ! discovered_tags="$(
             gh api --paginate repos/gelstable/gel-cli/releases \
@@ -78,6 +79,12 @@ jobs:
             if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
               remote_exists=true
               git fetch --no-tags origin "refs/heads/$branch:refs/remotes/origin/$branch"
+              branch_paths="$(git diff --name-only "refs/remotes/origin/$DEFAULT_BRANCH" "refs/remotes/origin/$branch")"
+              unexpected_branch_paths="$(printf '%s\n' "$branch_paths" | awk 'NF && $0 !~ /^(releases\/gel-cli|pointers|public)\//')"
+              if [[ -n "$unexpected_branch_paths" ]]; then
+                echo "remote $branch contains paths outside the promotion phase: $unexpected_branch_paths" >&2
+                exit 1
+              fi
               git switch --detach "refs/remotes/origin/$branch"
               git switch -C "$branch"
             else

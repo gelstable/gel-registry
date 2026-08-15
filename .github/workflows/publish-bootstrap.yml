@@ -68,6 +68,12 @@ jobs:
           if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
             remote_exists=true
             git fetch --no-tags origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            branch_paths="$(git diff --name-only "refs/remotes/origin/$DEFAULT_BRANCH" "refs/remotes/origin/$branch")"
+            unexpected_branch_paths="$(printf '%s\n' "$branch_paths" | awk 'NF && $0 !~ /^(pointers|public)\//')"
+            if [[ -n "$unexpected_branch_paths" ]]; then
+              echo "remote $branch contains paths outside the publication phase: $unexpected_branch_paths" >&2
+              exit 1
+            fi
             if ! git diff --quiet "refs/remotes/origin/$branch" -- pointers public; then
               echo "remote $branch contains different publication bytes; inspect that branch before rerunning" >&2
               exit 1
