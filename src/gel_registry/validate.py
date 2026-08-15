@@ -403,7 +403,7 @@ def _check_releases(repo: Path, collector: _Collector) -> None:
     for relative, raw in sorted(files.items()):
         path = root / relative
         pieces = Path(relative).parts
-        if len(pieces) != 3 or pieces[0] != "gel-cli" or not relative.endswith(".json"):
+        if len(pieces) != 2 or pieces[0] != "gel-cli" or not relative.endswith(".json"):
             collector.add(
                 check, _display_path(repo, path), "unexpected release record path"
             )

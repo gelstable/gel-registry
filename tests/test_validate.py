@@ -178,7 +178,7 @@ def test_local_validation_does_not_construct_remote_client_for_empty_release_sco
     assert calls == 0
 
 
-def _release_record() -> ReleaseRecord:
+def _release_record(version: str = "1.2.3") -> ReleaseRecord:
     artifacts: list[Artifact] = []
     for platform in CLI_PLATFORMS:
         suffix = ".exe" if platform.endswith("-windows-msvc") else ""
@@ -197,7 +197,7 @@ def _release_record() -> ReleaseRecord:
                     ),
                     url=(
                         "https://github.com/gelstable/gel-cli/releases/download/"
-                        f"v1.2.3/{name}"
+                        f"v{version}/{name}"
                     ),
                     size=3,
                     sha256="a" * 64,
@@ -207,15 +207,34 @@ def _release_record() -> ReleaseRecord:
     return ReleaseRecord(
         product="gel-cli",
         channel="stable",
-        version="1.2.3",
+        version=version,
         source=ReleaseSource(
             repository="gelstable/gel-cli",
-            release_tag="v1.2.3",
+            release_tag=f"v{version}",
             release_id=123,
         ),
         promoted_at=CAPTURED_AT,
         artifacts=tuple(artifacts),
     )
+
+
+def test_clean_repository_with_a_valid_release_record_passes(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    _complete_repository(tmp_path, package_index_data)
+    record = _release_record("2.0.0")
+    release_path = tmp_path / "releases" / "gel-cli" / "2.0.0.json"
+    release_path.parent.mkdir(parents=True)
+    release_path.write_bytes(canonical_json(record))
+    snapshot = build_snapshot(tmp_path)
+    (tmp_path / "pointers" / "latest.json").write_bytes(
+        canonical_json(Pointer(snapshot=snapshot))
+    )
+    select_snapshot(tmp_path)
+
+    report = validate_local(tmp_path)
+
+    assert report.ok, report.errors
 
 
 def test_scoped_release_remote_checks_only_supplied_records(
