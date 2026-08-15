@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+import gel_registry.github as github_module
 from gel_registry.constants import CLI_PLATFORMS
 from gel_registry.github import (
     GITHUB_REPOSITORY,
@@ -146,6 +147,26 @@ def test_discovery_rejects_http_failure_and_fork_owned_release() -> None:
         assert discover_cli_releases(client, known_versions=()) == ()
 
 
+def test_discovery_uses_strict_semver_acceptance_and_precedence() -> None:
+    candidates = [
+        _release("v1.0.0-01", 1),
+        _release("v1.0.0-alpha.01", 2),
+        _release("v1.0.0+foo--bar", 3),
+        _release("v1.0.0-alpha.2", 4),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=candidates)
+
+    with _client(handler) as client:
+        releases = discover_cli_releases(client, known_versions=())
+
+    assert [release.version for release in releases] == [
+        "1.0.0-alpha.2",
+        "1.0.0+foo--bar",
+    ]
+
+
 def test_download_assets_streams_installrefs_and_sidecars(tmp_path: Path) -> None:
     release = discover_cli_releases(
         _client(lambda request: httpx.Response(200, json=[_release()])),
@@ -181,3 +202,54 @@ def test_download_assets_rejects_http_failure_without_partial_destination(
         download_assets(client, release, tmp_path / "assets")
 
     assert not (tmp_path / "assets").exists()
+
+
+@pytest.mark.parametrize(
+    "location", ["https://evil.example/payload", "http://github.com/payload"]
+)
+def test_download_assets_rejects_unsafe_redirects(
+    tmp_path: Path, location: str
+) -> None:
+    release = discover_cli_releases(
+        _client(lambda request: httpx.Response(200, json=[_release()])),
+        known_versions=(),
+    )[0]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"Location": location})
+
+    with _client(handler) as client, pytest.raises(GitHubError, match="redirect"):
+        download_assets(client, release, tmp_path / "assets")
+    assert not (tmp_path / "assets").exists()
+
+
+def test_download_assets_preserves_raced_destination_and_rejects_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release = discover_cli_releases(
+        _client(lambda request: httpx.Response(200, json=[_release()])),
+        known_versions=(),
+    )[0]
+    destination = tmp_path / "assets"
+    real_rename = github_module._rename_noreplace
+
+    def race(source: Path, target: Path) -> None:
+        target.mkdir()
+        (target / "winner").write_bytes(b"winner")
+        real_rename(source, target)
+
+    monkeypatch.setattr(github_module, "_rename_noreplace", race)
+    with (
+        _client(lambda request: httpx.Response(200, content=b"x")) as client,
+        pytest.raises(GitHubError),
+    ):
+        download_assets(client, release, destination)
+    assert (destination / "winner").read_bytes() == b"winner"
+
+    dangling = tmp_path / "dangling"
+    dangling.symlink_to(tmp_path / "missing")
+    with (
+        _client(lambda request: httpx.Response(200, content=b"x")) as client,
+        pytest.raises(GitHubError, match="already exists"),
+    ):
+        download_assets(client, release, dangling)

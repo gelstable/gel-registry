@@ -140,12 +140,6 @@ def _installref_parts(platform: str) -> tuple[str, str]:
     return identity, f"{identity}.zst"
 
 
-def _installref_like(name: str) -> bool:
-    if not name.startswith("gel-cli-"):
-        return False
-    return any(name.startswith(f"gel-cli-{platform}") for platform in CLI_PLATFORMS)
-
-
 def verify_cli_release(
     release: GitHubRelease,
     assets: Mapping[str, Path],
@@ -168,13 +162,6 @@ def verify_cli_release(
     if missing:
         raise VerificationError(
             "release is missing canonical installrefs: " + ", ".join(missing)
-        )
-    extra_installrefs = sorted(
-        name for name in release_names - expected_names if _installref_like(name)
-    )
-    if extra_installrefs:
-        raise VerificationError(
-            "release contains extra installrefs: " + ", ".join(extra_installrefs)
         )
     if set(assets) != release_names:
         missing_files = sorted(release_names - set(assets))

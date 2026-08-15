@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
-import re
+import os
 import shutil
+import sys
 import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
-from packaging.version import InvalidVersion, Version
 
 from .constants import CLI_PLATFORMS, PRODUCT_REPOSITORIES
+from .schema import parse_semver, semver_key
 
 GITHUB_REPOSITORY = PRODUCT_REPOSITORIES["gel-cli"]
 GITHUB_API = "https://api.github.com"
@@ -35,13 +38,23 @@ _REQUEST_TIMEOUT = httpx.Timeout(
     write=60.0,
     pool=60.0,
 )
-_SEMVER = re.compile(
-    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-    r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
-    r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
-)
 _MAX_PAGES = 1000
 _STREAM_CHUNK_SIZE = 1024 * 1024
+_MAX_REDIRECTS = 10
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+_ASSET_DELIVERY_HOSTS = frozenset(
+    {
+        "api.github.com",
+        "github.com",
+        "objects.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "github-releases.githubusercontent.com",
+        "github-cloud.s3.amazonaws.com",
+    }
+)
+_RENAME_EXCL = 0x00000004
+_RENAME_NOREPLACE = 0x00000001
+_AT_FDCWD = -100
 
 
 class GitHubError(RuntimeError):
@@ -255,7 +268,7 @@ def _version_from_tag(tag: str) -> str | None:
     if not tag.startswith("v"):
         return None
     version = tag[1:]
-    if _SEMVER.fullmatch(version) is None:
+    if parse_semver(version) is None:
         return None
     return version
 
@@ -274,10 +287,12 @@ def _known_version_strings(known_versions: Iterable[object]) -> frozenset[str]:
     return frozenset(versions)
 
 
-def _release_sort_key(release: GitHubRelease) -> tuple[Version, str, int]:
+def _release_sort_key(
+    release: GitHubRelease,
+) -> tuple[tuple[int, int, int, tuple[tuple[int, int | str], ...], int], str, int]:
     try:
-        parsed = Version(release.version)
-    except InvalidVersion as exc:
+        parsed = semver_key(release.version)
+    except ValueError as exc:
         raise GitHubError(f"invalid release version {release.version!r}") from exc
     return (parsed, release.version, release.id)
 
@@ -456,6 +471,58 @@ def _download_url_for_asset(asset: GitHubAsset) -> str:
     raise GitHubError(f"asset {asset.name!r} is not an allowlisted GitHub asset URL")
 
 
+def _validate_delivery_url(url: str) -> None:
+    try:
+        parsed = urlsplit(url)
+        port = parsed.port
+    except ValueError as exc:
+        raise GitHubError(f"asset redirect URL is malformed: {url!r}") from exc
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in _ASSET_DELIVERY_HOSTS
+        or port not in (None, 443)
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
+        raise GitHubError(f"asset redirect leaves GitHub delivery origins: {url!r}")
+
+
+def _rename_noreplace(source: Path, destination: Path) -> None:
+    source_bytes = os.fsencode(str(source))
+    destination_bytes = os.fsencode(str(destination))
+    if b"\x00" in source_bytes or b"\x00" in destination_bytes:
+        raise OSError(errno.EINVAL, "path contains an embedded NUL")
+    libc = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        renamex_np = libc.renamex_np
+        renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        renamex_np.restype = ctypes.c_int
+        result = renamex_np(source_bytes, destination_bytes, _RENAME_EXCL)
+    elif sys.platform.startswith("linux"):
+        renameat2 = libc.renameat2
+        renameat2.argtypes = [
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            _AT_FDCWD,
+            source_bytes,
+            _AT_FDCWD,
+            destination_bytes,
+            _RENAME_NOREPLACE,
+        )
+    else:
+        raise OSError(errno.ENOTSUP, "atomic no-replace rename is unavailable")
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), str(destination))
+
+
 def download_assets(
     client: httpx.Client,
     release: GitHubRelease,
@@ -468,7 +535,7 @@ def download_assets(
     """
 
     destination = Path(destination)
-    if destination.exists():
+    if destination.exists() or destination.is_symlink():
         raise GitHubError(f"asset destination already exists: {destination}")
     names = [asset.name for asset in release.assets]
     if len(names) != len(set(names)):
@@ -484,33 +551,56 @@ def download_assets(
         result: dict[str, Path] = {}
         for asset in release.assets:
             url = _download_url_for_asset(asset)
+            _validate_delivery_url(url)
             target = stage / asset.name
             try:
-                with client.stream(
-                    "GET",
-                    url,
-                    headers=_ASSET_HEADERS,
-                    follow_redirects=True,
-                    timeout=_REQUEST_TIMEOUT,
-                ) as response:
-                    if response.status_code != 200:
-                        raise GitHubError(
-                            f"asset {asset.name!r} returned HTTP {response.status_code}"
-                        )
-                    sha256 = hashlib.sha256()
-                    blake2b = hashlib.blake2b(digest_size=64)
-                    size = 0
-                    with target.open("wb") as stream:
-                        for chunk in response.iter_bytes(chunk_size=_STREAM_CHUNK_SIZE):
-                            stream.write(chunk)
-                            size += len(chunk)
-                            sha256.update(chunk)
-                            blake2b.update(chunk)
-                    if asset.size is not None and asset.size != size:
-                        raise GitHubError(
-                            f"asset {asset.name!r} size changed: expected "
-                            f"{asset.size}, observed {size}"
-                        )
+                for redirect_count in range(_MAX_REDIRECTS + 1):
+                    with client.stream(
+                        "GET",
+                        url,
+                        headers=_ASSET_HEADERS,
+                        follow_redirects=False,
+                        timeout=_REQUEST_TIMEOUT,
+                    ) as response:
+                        response_url = str(response.url)
+                        _validate_delivery_url(response_url)
+                        if response.status_code in _REDIRECT_STATUSES:
+                            location = response.headers.get("location")
+                            if not location:
+                                raise GitHubError(
+                                    f"asset {asset.name!r} redirect has no Location"
+                                )
+                            if redirect_count == _MAX_REDIRECTS:
+                                raise GitHubError(
+                                    f"asset {asset.name!r} redirect limit exceeded"
+                                )
+                            url = urljoin(response_url, location)
+                            _validate_delivery_url(url)
+                            continue
+                        if response.status_code != 200:
+                            raise GitHubError(
+                                f"asset {asset.name!r} returned HTTP "
+                                f"{response.status_code}"
+                            )
+                        sha256 = hashlib.sha256()
+                        blake2b = hashlib.blake2b(digest_size=64)
+                        size = 0
+                        with target.open("wb") as stream:
+                            for chunk in response.iter_bytes(
+                                chunk_size=_STREAM_CHUNK_SIZE
+                            ):
+                                stream.write(chunk)
+                                size += len(chunk)
+                                sha256.update(chunk)
+                                blake2b.update(chunk)
+                        if asset.size is not None and asset.size != size:
+                            raise GitHubError(
+                                f"asset {asset.name!r} size changed: expected "
+                                f"{asset.size}, observed {size}"
+                            )
+                        break
+                else:
+                    raise GitHubError(f"asset {asset.name!r} redirect failed")
             except GitHubError:
                 raise
             except (httpx.HTTPError, OSError) as exc:
@@ -519,7 +609,7 @@ def download_assets(
                 ) from exc
             result[asset.name] = destination / asset.name
         try:
-            stage.rename(destination)
+            _rename_noreplace(stage, destination)
         except OSError as exc:
             raise GitHubError(f"could not install downloaded assets: {exc}") from exc
         return result

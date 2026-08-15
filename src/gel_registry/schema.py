@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
@@ -40,6 +41,60 @@ _SEMVER = re.compile(
     r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
     r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SemVer:
+    """Strict SemVer components and prerelease identifiers."""
+
+    major: int
+    minor: int
+    patch: int
+    prerelease: tuple[int | str, ...]
+
+
+def parse_semver(value: str) -> SemVer | None:
+    """Parse the repository's strict ASCII SemVer contract."""
+
+    match = _SEMVER.fullmatch(value)
+    if match is None:
+        return None
+    prerelease: list[int | str] = []
+    raw_prerelease = match.group(4)
+    if raw_prerelease is not None:
+        for identifier in raw_prerelease.split("."):
+            if identifier.isdigit():
+                if len(identifier) > 1 and identifier.startswith("0"):
+                    return None
+                prerelease.append(int(identifier))
+            else:
+                prerelease.append(identifier)
+    return SemVer(
+        major=int(match.group(1)),
+        minor=int(match.group(2)),
+        patch=int(match.group(3)),
+        prerelease=tuple(prerelease),
+    )
+
+
+def semver_key(
+    value: str,
+) -> tuple[int, int, int, tuple[tuple[int, int | str], ...], int]:
+    """Return the SemVer precedence key, ignoring build metadata."""
+
+    parsed = parse_semver(value)
+    if parsed is None:
+        raise ValueError(f"invalid SemVer: {value!r}")
+    if not parsed.prerelease:
+        prerelease_key: tuple[tuple[int, int | str], ...] = ((2, 0),)
+    else:
+        prerelease_key = tuple(
+            (0, identifier) if isinstance(identifier, int) else (1, identifier)
+            for identifier in parsed.prerelease
+        )
+    # The final marker makes a release version sort after all prereleases.
+    return (parsed.major, parsed.minor, parsed.patch, prerelease_key, 0)
+
 
 type JsonPrimitive = None | bool | int | float | str
 type JsonValue = JsonPrimitive | list[JsonValue] | dict[str, JsonValue]
@@ -403,20 +458,8 @@ class ReleaseRecord(BaseModel):
     def validate_version(cls, value: str) -> str:
         if value.startswith("v"):
             raise ValueError("release version must not have a leading v")
-        match = _SEMVER.fullmatch(value)
-        if match is None:
+        if parse_semver(value) is None:
             raise ValueError("release version must be a SemVer")
-        prerelease = match.group(4)
-        if prerelease is not None:
-            for identifier in prerelease.split("."):
-                if (
-                    identifier.isdigit()
-                    and len(identifier) > 1
-                    and identifier[0] == "0"
-                ):
-                    raise ValueError(
-                        "numeric prerelease identifiers must not have leading zeroes"
-                    )
         return value
 
     @field_validator("promoted_at")
@@ -562,6 +605,9 @@ __all__ = [
     "ReleaseSource",
     "RootIndex",
     "RootManifest",
+    "SemVer",
     "SnapshotListing",
     "Verification",
+    "parse_semver",
+    "semver_key",
 ]

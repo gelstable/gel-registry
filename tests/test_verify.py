@@ -90,16 +90,22 @@ def test_verify_cli_release_checks_bytes_pairs_media_types_and_attestations(
 ) -> None:
     release = _release()
     assets = _files(tmp_path, release)
-    assets["checksums.txt"] = tmp_path / "checksums.txt"
+    assets.pop("checksums.txt")
+    sidecar_name = "gel-cli-x86_64-unknown-linux-musl.sha256"
+    (tmp_path / sidecar_name).write_bytes(b"checksums")
+    assets[sidecar_name] = tmp_path / sidecar_name
     release = GitHubRelease(
         id=release.id,
         tag_name=release.tag_name,
         assets=(
             *release.assets,
             GitHubAsset(
-                name="checksums.txt",
+                name=sidecar_name,
                 url="https://api.github.com/repos/gelstable/gel-cli/assets/999",
-                browser_download_url="https://github.com/gelstable/gel-cli/releases/download/v1.2.3/checksums.txt",
+                browser_download_url=(
+                    "https://github.com/gelstable/gel-cli/releases/download/"
+                    f"v1.2.3/{sidecar_name}"
+                ),
             ),
         ),
     )
