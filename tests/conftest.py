@@ -37,9 +37,22 @@ def installref_data(
 def package_data(installref_data: dict[str, object]) -> dict[str, object]:
     return {
         "basename": "gel-cli",
+        "name": "gel-cli",
         "version": "1.2.3",
+        "version_details": {
+            "major": 1,
+            "minor": 2,
+            "patch": 3,
+            "prerelease": [],
+            "metadata": {"build_hash": "abc123"},
+        },
+        "version_key": "1.2.3",
+        "revision": "1",
+        "build_date": "2026-08-15T00:00:00+00:00",
+        "architecture": "x86_64",
         "slot": "",
         "tags": {},
+        "installref": installref_data["ref"],
         "installrefs": [installref_data],
     }
 

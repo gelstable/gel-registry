@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -72,6 +73,11 @@ def test_capture_entry_status_controls_byte_metadata() -> None:
     assert good.size == 3
     assert absent.status == 404
     assert absent.path is None
+
+    off_origin = good.model_dump()
+    off_origin["final_url"] = "https://evil.example/payload"
+    with pytest.raises(ValidationError):
+        CaptureEntry(**off_origin)
 
     with pytest.raises(ValidationError):
         CaptureEntry(
@@ -183,6 +189,22 @@ def test_package_index_rejects_duplicate_package_identity(
         PackageIndex(packages=[package_data, package_data])
 
 
+def test_package_index_preserves_the_full_legacy_package_shape(
+    package_data: dict[str, object],
+) -> None:
+    index = PackageIndex.model_validate_json(json.dumps({"packages": [package_data]}))
+
+    assert index.model_dump(mode="json") == {"packages": [package_data]}
+    package = index.packages[0]
+    assert package.name == "gel-cli"
+    assert package.version_details["metadata"] == {"build_hash": "abc123"}
+    assert package.version_key == "1.2.3"
+    assert package.revision == "1"
+    assert package.build_date == "2026-08-15T00:00:00+00:00"
+    assert package.architecture == "x86_64"
+    assert package.installref == package_data["installref"]
+
+
 def test_release_record_requires_semver_without_leading_v() -> None:
     artifact = Artifact(
         platform=CLI_PLATFORMS[0],
@@ -208,6 +230,55 @@ def test_release_record_requires_semver_without_leading_v() -> None:
     }
     with pytest.raises(ValidationError):
         ReleaseRecord(**data)
+
+
+@pytest.mark.parametrize(
+    ("version", "valid"),
+    [("1.2.3-01", False), ("1.2.3-alpha.01", False), ("1.2.3-foo+bar", True)],
+)
+def test_release_record_applies_exact_semver_prerelease_rules(
+    version: str, valid: bool
+) -> None:
+    def artifact(platform: str, encoding: str) -> Artifact:
+        media_type = (
+            "application/x-mach-binary"
+            if platform.endswith("-apple-darwin")
+            else "application/x-dosexec"
+            if platform.endswith("-windows-msvc")
+            else "application/x-pie-executable"
+        )
+        return Artifact(
+            platform=platform,
+            encoding=encoding,
+            media_type=media_type,
+            url="https://github.com/gelstable/gel-cli/releases/download/v1.2.3/a",
+            size=1,
+            sha256="a" * 64,
+            blake2b="b" * 128,
+        )
+
+    data = {
+        "schema_version": 1,
+        "product": "gel-cli",
+        "channel": "stable",
+        "version": version,
+        "source": {
+            "repository": "gelstable/gel-cli",
+            "release_tag": f"v{version}",
+            "release_id": 1,
+        },
+        "promoted_at": datetime(2026, 8, 15, tzinfo=UTC),
+        "artifacts": [
+            artifact(platform, encoding)
+            for platform in CLI_PLATFORMS
+            for encoding in ("identity", "zstd")
+        ],
+    }
+    if valid:
+        assert ReleaseRecord(**data).version == version
+    else:
+        with pytest.raises(ValidationError):
+            ReleaseRecord(**data)
 
 
 def test_release_record_requires_the_ten_cli_installrefs() -> None:

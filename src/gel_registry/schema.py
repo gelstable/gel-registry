@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from packaging.version import InvalidVersion, Version
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -144,10 +143,23 @@ class PackageEntry(BaseModel):
     model_config = _MODEL_CONFIG
 
     basename: StrictString
+    name: StrictString
     version: StrictString
+    version_details: dict[str, JsonValue]
+    version_key: StrictString
+    revision: StrictString
+    build_date: StrictString
+    architecture: StrictString
     slot: str
     tags: dict[str, JsonValue] = Field(default_factory=dict)
+    installref: StrictString
     installrefs: tuple[InstallRef, ...]
+
+    @field_validator("installref")
+    @classmethod
+    def validate_installref(cls, value: str) -> str:
+        _url_parts(value, host="packages.geldata.com")
+        return value
 
 
 class PackageIndex(BaseModel):
@@ -233,7 +245,7 @@ class CaptureEntry(BaseModel):
                     "HTTP 200 capture entries require byte metadata and path"
                 )
             assert self.final_url is not None
-            _url_parts(self.final_url, absolute=True)
+            _url_parts(self.final_url, absolute=True, host="packages.geldata.com")
             if self.path != f"indexes/{self.channel}-{self.platform}.json":
                 raise ValueError("capture body path does not match the matrix entry")
         elif any(value is not None for value in body_fields):
@@ -380,12 +392,20 @@ class ReleaseRecord(BaseModel):
     def validate_version(cls, value: str) -> str:
         if value.startswith("v"):
             raise ValueError("release version must not have a leading v")
-        if not _SEMVER.fullmatch(value):
+        match = _SEMVER.fullmatch(value)
+        if match is None:
             raise ValueError("release version must be a SemVer")
-        try:
-            Version(value)
-        except InvalidVersion as exc:
-            raise ValueError("release version must be a valid version") from exc
+        prerelease = match.group(4)
+        if prerelease is not None:
+            for identifier in prerelease.split("."):
+                if (
+                    identifier.isdigit()
+                    and len(identifier) > 1
+                    and identifier[0] == "0"
+                ):
+                    raise ValueError(
+                        "numeric prerelease identifiers must not have leading zeroes"
+                    )
         return value
 
     @field_validator("promoted_at")
