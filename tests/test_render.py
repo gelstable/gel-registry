@@ -183,6 +183,37 @@ def test_build_refuses_to_overwrite_mutated_existing_snapshot(tmp_path: Path) ->
         build_snapshot(tmp_path)
 
 
+def test_build_rejects_symlinked_snapshot_parent_before_installation(
+    tmp_path: Path,
+) -> None:
+    _copy_release(tmp_path)
+    public = tmp_path / "public"
+    public.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (public / "s").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(RenderError, match="snapshot"):
+        build_snapshot(tmp_path)
+
+    assert not tuple(outside.iterdir())
+
+
+def test_render_schemas_rejects_symlinked_v1_parent_before_writing(
+    tmp_path: Path,
+) -> None:
+    public = tmp_path / "public"
+    public.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (public / "v1").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(RenderError, match="schema"):
+        render_schemas(tmp_path)
+
+    assert not tuple(outside.iterdir())
+
+
 def test_build_uses_no_replace_when_snapshot_destination_races(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

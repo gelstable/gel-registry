@@ -73,6 +73,43 @@ def _directory(path: Path, label: str) -> None:
         raise RenderError(f"{label} is not a directory: {path}")
 
 
+def _ensure_directory_chain(path: Path, label: str) -> None:
+    """Create a directory and reject symlinked/non-directory ancestors.
+
+    ``Path.mkdir(parents=True)`` follows an existing symlink in the chain.
+    Renderer inputs can be supplied by a working tree or a generated staging
+    tree, so every ancestor is checked before a filesystem write is attempted.
+    """
+
+    missing: list[Path] = []
+    current = path
+    while True:
+        if current.is_symlink():
+            raise RenderError(f"{label} contains symlinked ancestor: {current}")
+        if current.exists():
+            if not current.is_dir():
+                raise RenderError(f"{label} ancestor is not a directory: {current}")
+            break
+        missing.append(current)
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+    for directory in reversed(missing):
+        try:
+            directory.mkdir()
+        except FileExistsError:
+            if directory.is_symlink() or not directory.is_dir():
+                raise RenderError(
+                    f"{label} ancestor is not a regular directory: {directory}"
+                ) from None
+        except OSError as exc:
+            raise RenderError(
+                f"could not create {label} directory {directory}: {exc}"
+            ) from exc
+
+
 def _read_model[ModelT: BaseModel](
     path: Path, model: type[ModelT], label: str
 ) -> ModelT:
@@ -337,7 +374,7 @@ def _install_directory(stage: Path, destination: Path, label: str) -> None:
         _verify_tree(stage, destination, label)
         return
     try:
-        destination.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_directory_chain(destination.parent, f"{label} parent")
         _rename_noreplace(stage, destination)
     except OSError as exc:
         if exc.errno != errno.EEXIST:
@@ -350,9 +387,7 @@ def _atomic_replace_impl(path: Path, data: bytes, label: str) -> None:
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise RenderError(f"{label} is not a regular file: {path}")
     parent = path.parent
-    if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
-        raise RenderError(f"{label} parent is not a directory: {parent}")
-    parent.mkdir(parents=True, exist_ok=True)
+    _ensure_directory_chain(parent, f"{label} parent")
     temporary: Path | None = None
     try:
         fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(parent))
@@ -385,9 +420,7 @@ def _preflight_target(path: Path, label: str) -> None:
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise RenderError(f"{label} is not a regular file: {path}")
     parent = path.parent
-    if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
-        raise RenderError(f"{label} parent is not a directory: {parent}")
-    parent.mkdir(parents=True, exist_ok=True)
+    _ensure_directory_chain(parent, f"{label} parent")
 
 
 def _prior_bytes(path: Path) -> bytes | None:
@@ -466,15 +499,17 @@ def build_snapshot(repo: Path) -> str:
     root = _root_for_indexes(index_bytes, "index/")
 
     public = repo / "public"
-    if public.exists() or public.is_symlink():
-        _directory(public, "public root")
-    else:
-        public.mkdir(parents=True)
+    _ensure_directory_chain(public, "public root")
+    _directory(public, "public root")
     stage_parent = public / ".snapshot-staging"
-    if stage_parent.exists() or stage_parent.is_symlink():
-        _directory(stage_parent, "snapshot staging root")
-    else:
-        stage_parent.mkdir()
+    _ensure_directory_chain(stage_parent, "snapshot staging root")
+    _directory(stage_parent, "snapshot staging root")
+    destination = public / "s" / snapshot
+    if destination.is_symlink() or (destination.exists() and not destination.is_dir()):
+        raise RenderError(
+            f"snapshot destination is not a regular directory: {destination}"
+        )
+    _ensure_directory_chain(destination.parent, f"snapshot {snapshot} parent")
     stage = Path(tempfile.mkdtemp(prefix="snapshot-", dir=str(stage_parent)))
     staged_snapshot = stage / snapshot
     try:
@@ -485,7 +520,6 @@ def build_snapshot(repo: Path) -> str:
         ):
             (staged_snapshot / relative).write_bytes(data)
         (staged_snapshot / "registry.json").write_bytes(canonical_json(root))
-        destination = public / "s" / snapshot
         _install_directory(staged_snapshot, destination, f"snapshot {snapshot}")
     except (OSError, ValueError) as exc:
         raise RenderError(f"could not build snapshot {snapshot}: {exc}") from exc
@@ -638,15 +672,11 @@ def render_schemas(repo: Path) -> None:
 
     repo = Path(repo)
     public = repo / "public"
-    if public.exists() or public.is_symlink():
-        _directory(public, "public root")
-    else:
-        public.mkdir(parents=True)
+    _ensure_directory_chain(public, "public root")
+    _directory(public, "public root")
     schema_dir = public / "v1" / "schema"
-    if schema_dir.exists() or schema_dir.is_symlink():
-        _directory(schema_dir, "schema root")
-    else:
-        schema_dir.mkdir(parents=True)
+    _ensure_directory_chain(schema_dir, "schema root")
+    _directory(schema_dir, "schema root")
 
     documents = list(_support_documents())
     documents.append(("../healthz", b"ok\n"))

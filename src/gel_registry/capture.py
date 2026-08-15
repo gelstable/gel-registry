@@ -194,6 +194,12 @@ def _same_file(left: Path, right: Path) -> bool:
 
 
 def _conditional_headers(entry: CaptureEntry) -> tuple[str, str] | None:
+    # A 404 is an explicit absence, not a representation whose body can be
+    # validated by a conditional request.  Restrict validators to successful
+    # bodies so an origin returning 304 for a cached absence cannot make a
+    # stable matrix entry fail closed.
+    if entry.status != 200:
+        return None
     if entry.etag is not None:
         return ("If-None-Match", entry.etag)
     if entry.last_modified is not None:

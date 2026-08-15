@@ -237,6 +237,45 @@ def test_capture_legacy_accepts_validator_backed_304(
     assert requests[24].headers[request_header] == first_header
 
 
+def test_capture_legacy_does_not_conditionally_recheck_404_validators(
+    httpx_mock: HTTPXMock,
+    tmp_path: Path,
+) -> None:
+    urls = capture_urls()
+    calls = 0
+
+    def missing_with_validator(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(
+                404,
+                headers={"ETag": '"missing"'},
+                request=request,
+            )
+        if "if-none-match" in request.headers:
+            return httpx.Response(304, request=request)
+        return httpx.Response(404, request=request)
+
+    httpx_mock.add_callback(
+        missing_with_validator,
+        method="GET",
+        url=urls[0][2],
+        is_reusable=True,
+    )
+    for _channel, _platform, url in urls[1:]:
+        httpx_mock.add_response(method="GET", url=url, status_code=404)
+    for _channel, _platform, url in urls[1:]:
+        httpx_mock.add_response(method="GET", url=url, status_code=404)
+
+    destination = tmp_path / "capture"
+    with httpx.Client() as client:
+        manifest = capture_legacy(client, destination, CAPTURED_AT)
+
+    assert manifest.entries[0].status == 404
+    assert "if-none-match" not in httpx_mock.get_requests()[24].headers
+
+
 def test_capture_legacy_rejects_unconditional_304(
     httpx_mock: HTTPXMock,
     tmp_path: Path,
