@@ -1,0 +1,65 @@
+{
+  "packages": [
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-11-23T00:28:23.635277+00:00",
+      "installref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+8ddf8a0.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+8ddf8a0.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "b0300361b0ea9d5d8d146a42a4790e9e93e8249359b61a5d03132c7a3549e70cf0869c428a547770df97df302e67a0bd51f89de5d23f4be81236f2a3b65981c4",
+            "sha256": "5dd46ae50dcd05a9362438c614e8a515ffb0a7b1df8009bece7d33e719def2a6",
+            "size": 24108032
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+8ddf8a0.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "c78b9f4e049ced99dd783ef0dac680acfa6d96b3566fe503360e6812358ee363934514438d9cd03017fe22c3c3bff8d0d5605ebeaea60b2cf839377c41932d86",
+            "sha256": "eb8ccbab4f01ba6290d361eac49e7333e56263de1bc39475979e675fab5eb8f9",
+            "size": 9951024
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+8ddf8a0.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "6c45d9a9b97087bea5659937a64d4b35db02758a1304725713df24129bb1cf2092b6815609e277f6ed02f076e618cdc9ee249bb841857e8b2975ae60e0412e29",
+            "sha256": "57c5b30512d04ace1a8f66c60c67e352b678b49450b9ba0d94b7a6ddcb0bc173",
+            "size": 7565487
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202511230027",
+      "slot": "",
+      "tags": {},
+      "version": "7.10.2-dev.1474+8ddf8a0",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "8ddf8a0",
+          "build_revision": "202511230027",
+          "scm_revision": "7c602f7c1",
+          "source_date": "2025112200"
+        },
+        "minor": 10,
+        "patch": 2,
+        "prerelease": [
+          {
+            "number": 1474,
+            "phase": "dev"
+          }
+        ]
+      },
+      "version_key": "7.10.2~dev.1474.202511230027"
+    }
+  ]
+}

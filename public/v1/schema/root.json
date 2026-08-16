@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "RootIndex": {
+      "additionalProperties": false,
+      "description": "A channel/platform index reference in a root manifest.",
+      "properties": {
+        "channel": {
+          "minLength": 1,
+          "title": "Channel",
+          "type": "string"
+        },
+        "platform": {
+          "minLength": 1,
+          "title": "Platform",
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel",
+        "platform",
+        "url"
+      ],
+      "title": "RootIndex",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A root document listing exactly the indexes in one snapshot.",
+  "properties": {
+    "indexes": {
+      "items": {
+        "$ref": "#/$defs/RootIndex"
+      },
+      "title": "Indexes",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "indexes"
+  ],
+  "title": "RootManifest",
+  "type": "object"
+}

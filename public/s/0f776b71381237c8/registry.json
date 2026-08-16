@@ -1,0 +1,120 @@
+{
+  "indexes": [
+    {
+      "channel": "stable",
+      "platform": "x86_64-unknown-linux-gnu",
+      "url": "index/stable-x86_64-unknown-linux-gnu.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "x86_64-unknown-linux-musl",
+      "url": "index/stable-x86_64-unknown-linux-musl.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-unknown-linux-gnu",
+      "url": "index/stable-aarch64-unknown-linux-gnu.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-unknown-linux-musl",
+      "url": "index/stable-aarch64-unknown-linux-musl.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "x86_64-apple-darwin",
+      "url": "index/stable-x86_64-apple-darwin.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-apple-darwin",
+      "url": "index/stable-aarch64-apple-darwin.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "x86_64-pc-windows-msvc",
+      "url": "index/stable-x86_64-pc-windows-msvc.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-pc-windows-msvc",
+      "url": "index/stable-aarch64-pc-windows-msvc.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-unknown-linux-gnu",
+      "url": "index/testing-x86_64-unknown-linux-gnu.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-unknown-linux-musl",
+      "url": "index/testing-x86_64-unknown-linux-musl.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "aarch64-unknown-linux-gnu",
+      "url": "index/testing-aarch64-unknown-linux-gnu.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "aarch64-unknown-linux-musl",
+      "url": "index/testing-aarch64-unknown-linux-musl.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-apple-darwin",
+      "url": "index/testing-x86_64-apple-darwin.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "aarch64-apple-darwin",
+      "url": "index/testing-aarch64-apple-darwin.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-pc-windows-msvc",
+      "url": "index/testing-x86_64-pc-windows-msvc.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-unknown-linux-gnu",
+      "url": "index/nightly-x86_64-unknown-linux-gnu.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-unknown-linux-musl",
+      "url": "index/nightly-x86_64-unknown-linux-musl.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-unknown-linux-gnu",
+      "url": "index/nightly-aarch64-unknown-linux-gnu.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-unknown-linux-musl",
+      "url": "index/nightly-aarch64-unknown-linux-musl.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-apple-darwin",
+      "url": "index/nightly-x86_64-apple-darwin.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-apple-darwin",
+      "url": "index/nightly-aarch64-apple-darwin.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-pc-windows-msvc",
+      "url": "index/nightly-x86_64-pc-windows-msvc.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-pc-windows-msvc",
+      "url": "index/nightly-aarch64-pc-windows-msvc.json"
+    }
+  ],
+  "schema_version": 1
+}

@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "Published listing of every immutable snapshot and the selected one.",
+  "properties": {
+    "latest": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Latest",
+      "type": "string"
+    },
+    "snapshots": {
+      "items": {
+        "pattern": "^[0-9a-f]{16}$",
+        "type": "string"
+      },
+      "title": "Snapshots",
+      "type": "array"
+    }
+  },
+  "required": [
+    "latest",
+    "snapshots"
+  ],
+  "title": "SnapshotListing",
+  "type": "object"
+}
