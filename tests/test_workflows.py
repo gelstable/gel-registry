@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -18,6 +19,9 @@ WORKFLOW_NAMES = {
     "validate.yml",
 }
 FULL_SHA = re.compile(r"[^@\s]+@[0-9a-f]{40}\s*(?:#.*)?$")
+REGISTRY_DATA_SCRIPT = (
+    Path(__file__).parents[1] / ".github" / "scripts" / "detect-registry-data.sh"
+)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -64,11 +68,38 @@ def _walk(value: object) -> list[tuple[str, object]]:
     return pairs
 
 
+def _detect_registry_data(repo: Path) -> str:
+    output = repo / "github-output"
+    output.unlink(missing_ok=True)
+    env = os.environ | {"GITHUB_OUTPUT": str(output)}
+    subprocess.run(
+        ["bash", str(REGISTRY_DATA_SCRIPT)],
+        cwd=repo,
+        env=env,
+        check=True,
+    )
+    return output.read_text().strip()
+
+
 @pytest.fixture(scope="module")
 def workflows() -> dict[str, dict[str, Any]]:
     paths = sorted(WORKFLOW_ROOT.glob("*.y*ml"))
     assert {path.name for path in paths} == WORKFLOW_NAMES
     return {path.name: _load_yaml(path) for path in paths}
+
+
+@pytest.mark.parametrize(
+    "data_root",
+    ["upstream", "bootstrap", "releases", "pointers", "public"],
+)
+def test_registry_data_detection_skips_only_source_trees(
+    tmp_path: Path, data_root: str
+) -> None:
+    assert _detect_registry_data(tmp_path) == "present=false"
+
+    (tmp_path / data_root).mkdir()
+
+    assert _detect_registry_data(tmp_path) == "present=true"
 
 
 def test_every_third_party_action_is_pinned_to_a_full_sha(
@@ -178,6 +209,36 @@ def test_validation_scopes_live_rehearsal_to_capture_and_publication_changes(
     rehearsal = workflows["validate.yml"]["jobs"]["capture-rehearsal"]
     assert isinstance(rehearsal, dict)
     assert "needs.scope.outputs.rehearsal" in str(rehearsal.get("if"))
+
+
+def test_validation_skips_registry_checks_only_without_registry_data(
+    workflows: dict[str, dict[str, Any]],
+) -> None:
+    jobs = workflows["validate.yml"]["jobs"]
+    scope = jobs["scope"]
+    assert isinstance(scope, dict)
+    assert "registry_data" in scope["outputs"]
+    detector = next(
+        step
+        for step in scope["steps"]
+        if isinstance(step, dict) and step.get("id") == "registry-data"
+    )
+    assert detector["run"] == "bash .github/scripts/detect-registry-data.sh"
+
+    local = jobs["local"]
+    data_checks = [
+        step
+        for step in local["steps"]
+        if isinstance(step, dict)
+        and step.get("name")
+        in {
+            "Check normalization drift",
+            "Check render drift and immutable history",
+        }
+    ]
+    assert len(data_checks) == 2
+    for step in data_checks:
+        assert "needs.scope.outputs.registry_data == 'true'" in step["if"]
 
 
 def test_publication_and_promotion_reruns_fail_closed_or_are_idempotent(

@@ -15,6 +15,7 @@ jobs:
       contents: read
     outputs:
       capture: ${{ steps.changed.outputs.capture }}
+      registry_data: ${{ steps.registry-data.outputs.present }}
       rehearsal: ${{ steps.changed.outputs.rehearsal }}
       release: ${{ steps.changed.outputs.release }}
     steps:
@@ -23,6 +24,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+
+      - name: Detect registry data
+        id: registry-data
+        run: bash .github/scripts/detect-registry-data.sh
 
       - name: Identify scoped remote checks
         id: changed
@@ -113,11 +118,15 @@ jobs:
         run: uv run gel-registry validate-capture --repo . --base "$BASE_TREE"
 
       - name: Check normalization drift
-        if: needs.scope.outputs.capture != 'true'
+        if: >-
+          needs.scope.outputs.registry_data == 'true' &&
+          needs.scope.outputs.capture != 'true'
         run: uv run gel-registry normalize --repo . --check
 
       - name: Check render drift and immutable history
-        if: needs.scope.outputs.capture != 'true'
+        if: >-
+          needs.scope.outputs.registry_data == 'true' &&
+          needs.scope.outputs.capture != 'true'
         run: uv run gel-registry validate --repo . --base "$BASE_TREE"
 
   capture-rehearsal:
