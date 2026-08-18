@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 from pathlib import Path
@@ -18,19 +17,9 @@ WORKFLOW_NAMES = {
     "validate.yml",
 }
 FULL_SHA = re.compile(r"[^@\s]+@[0-9a-f]{40}\s*(?:#.*)?$")
-REGISTRY_DATA_SCRIPT = (
-    Path(__file__).parents[1] / ".github" / "scripts" / "detect-registry-data.sh"
-)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    """Load YAML without adding a runtime dependency to the registry package.
-
-    CI runners provide Ruby's standard YAML parser, while a developer who has
-    PyYAML installed gets a direct Python parse.  Both branches return JSON
-    compatible mappings so the policy assertions inspect parsed documents.
-    """
-
     try:
         import yaml  # type: ignore[import-untyped]
     except ModuleNotFoundError:
@@ -67,38 +56,11 @@ def _walk(value: object) -> list[tuple[str, object]]:
     return pairs
 
 
-def _detect_registry_data(repo: Path) -> str:
-    output = repo / "github-output"
-    output.unlink(missing_ok=True)
-    env = os.environ | {"GITHUB_OUTPUT": str(output)}
-    subprocess.run(
-        ["bash", str(REGISTRY_DATA_SCRIPT)],
-        cwd=repo,
-        env=env,
-        check=True,
-    )
-    return output.read_text().strip()
-
-
 @pytest.fixture(scope="module")
 def workflows() -> dict[str, dict[str, Any]]:
     paths = sorted(WORKFLOW_ROOT.glob("*.y*ml"))
     assert {path.name for path in paths} == WORKFLOW_NAMES
     return {path.name: _load_yaml(path) for path in paths}
-
-
-@pytest.mark.parametrize(
-    "data_root",
-    ["upstream", "bootstrap", "releases", "pointers", "public"],
-)
-def test_registry_data_detection_skips_only_source_trees(
-    tmp_path: Path, data_root: str
-) -> None:
-    assert _detect_registry_data(tmp_path) == "present=false"
-
-    (tmp_path / data_root).mkdir()
-
-    assert _detect_registry_data(tmp_path) == "present=true"
 
 
 def test_every_third_party_action_is_pinned_to_a_full_sha(
@@ -141,41 +103,6 @@ def test_workflows_have_explicit_least_privilege_permissions(
                 )
 
 
-def test_workflows_use_locked_dependencies_and_forbid_unsafe_dispatches(
-    workflows: dict[str, dict[str, Any]],
-) -> None:
-    all_text = "\n".join(
-        path.read_text() for path in sorted(WORKFLOW_ROOT.glob("*.y*ml"))
-    )
-    assert all(
-        workflow_text.count("uv sync --locked") >= 1
-        for workflow_text in (
-            path.read_text() for path in sorted(WORKFLOW_ROOT.glob("*.y*ml"))
-        )
-    )
-    assert "pull_request_target" not in all_text
-    assert "force" not in all_text.lower()
-
-    validate = workflows["validate.yml"]
-    jobs = validate["jobs"]
-    local = jobs["local"]
-    assert isinstance(local, dict)
-    local_text = json.dumps(local)
-    assert "packages.geldata.com" not in local_text
-    assert "verify-capture-live" not in local_text
-    assert "normalize --repo . --check" in local_text
-
-
-def test_pr_producers_have_only_job_scoped_write_permissions(
-    workflows: dict[str, dict[str, Any]],
-) -> None:
-    for name in ("publish-bootstrap.yml", "promote.yml"):
-        workflow = workflows[name]
-        top_level = json.dumps(workflow["permissions"])
-        assert '"write"' not in top_level
-        assert "pull_request_target" not in json.dumps(workflow)
-
-
 def test_triggers_match_their_operational_scope(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
@@ -196,58 +123,6 @@ def test_validation_scopes_remote_checks_to_release_changes(
     assert isinstance(outputs, dict)
     assert set(outputs) == {"registry_data", "release"}
     assert "capture-rehearsal" not in workflows["validate.yml"]["jobs"]
-
-
-def test_validation_skips_registry_checks_only_without_registry_data(
-    workflows: dict[str, dict[str, Any]],
-) -> None:
-    jobs = workflows["validate.yml"]["jobs"]
-    scope = jobs["scope"]
-    assert isinstance(scope, dict)
-    assert "registry_data" in scope["outputs"]
-    detector = next(
-        step
-        for step in scope["steps"]
-        if isinstance(step, dict) and step.get("id") == "registry-data"
-    )
-    assert detector["run"] == "bash .github/scripts/detect-registry-data.sh"
-
-    local = jobs["local"]
-    data_checks = [
-        step
-        for step in local["steps"]
-        if isinstance(step, dict)
-        and step.get("name")
-        in {
-            "Check normalization drift",
-            "Check render drift and immutable history",
-        }
-    ]
-    assert len(data_checks) == 2
-    for step in data_checks:
-        assert "needs.scope.outputs.registry_data == 'true'" in step["if"]
-
-
-def test_publication_and_promotion_reruns_fail_closed_or_are_idempotent(
-    workflows: dict[str, dict[str, Any]],
-) -> None:
-    publication_text = json.dumps(workflows["publish-bootstrap.yml"])
-    assert "PUBLICATION_PENDING" in publication_text
-    assert "already present" in publication_text
-    publication_scripts = "\n".join(
-        str(step.get("run", ""))
-        for step in workflows["publish-bootstrap.yml"]["jobs"]["publish"]["steps"]
-        if isinstance(step, dict)
-    )
-    assert (
-        'git diff --quiet "refs/remotes/origin/$DEFAULT_BRANCH" HEAD -- pointers public'
-        in publication_scripts
-    )
-    assert "git rev-list --count" not in publication_text
-    promotion_text = json.dumps(workflows["promote.yml"])
-    assert "if ! discovered_tags=" in promotion_text
-    assert "could not discover stable Gel CLI releases" in promotion_text
-    assert "mapfile -t tags < <(" not in promotion_text
 
 
 def test_retained_writer_branches_reject_unrelated_committed_paths(

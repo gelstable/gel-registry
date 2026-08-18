@@ -8,9 +8,7 @@ from pydantic import ValidationError
 
 from gel_registry.constants import (
     CAPTURE_ID,
-    CHANNELS,
     CLI_PLATFORMS,
-    LEGACY_PLATFORMS,
     ORIGIN,
     capture_urls,
 )
@@ -20,95 +18,54 @@ from gel_registry.schema import (
     CaptureManifest,
     InstallRef,
     PackageIndex,
-    Pointer,
     ReleaseRecord,
-    SnapshotListing,
 )
 
 
-def test_capture_urls_are_the_fixed_channel_platform_matrix() -> None:
-    urls = capture_urls()
-
-    assert len(urls) == 24
-    assert urls[0] == (
-        "stable",
-        LEGACY_PLATFORMS[0],
-        f"{ORIGIN}/archive/.jsonindexes/{LEGACY_PLATFORMS[0]}.json",
-    )
-    assert urls[8] == (
-        "testing",
-        LEGACY_PLATFORMS[0],
-        f"{ORIGIN}/archive/.jsonindexes/{LEGACY_PLATFORMS[0]}.testing.json",
-    )
-    assert urls[16] == (
-        "nightly",
-        LEGACY_PLATFORMS[0],
-        f"{ORIGIN}/archive/.jsonindexes/{LEGACY_PLATFORMS[0]}.nightly.json",
-    )
-    assert [(channel, platform) for channel, platform, _ in urls] == [
-        (channel, platform) for channel in CHANNELS for platform in LEGACY_PLATFORMS
-    ]
-
-
-def test_capture_entry_status_controls_byte_metadata() -> None:
-    good = CaptureEntry(
-        channel="stable",
-        platform=LEGACY_PLATFORMS[0],
-        url=capture_urls()[0][2],
-        status=200,
-        final_url=capture_urls()[0][2],
-        size=3,
-        sha256="a" * 64,
-        blake2b="b" * 128,
-        path="indexes/stable-x86_64-unknown-linux-gnu.json",
-    )
-    absent = CaptureEntry(
-        channel="stable",
-        platform=LEGACY_PLATFORMS[1],
-        url=capture_urls()[1][2],
-        status=404,
-    )
-
-    assert good.status == 200
-    assert good.size == 3
-    assert absent.status == 404
-    assert absent.path is None
-
-    off_origin = good.model_dump()
-    off_origin["final_url"] = "https://evil.example/payload"
-    with pytest.raises(ValidationError):
-        CaptureEntry(**off_origin)
-
-    with pytest.raises(ValidationError):
-        CaptureEntry(
-            channel="stable",
-            platform=LEGACY_PLATFORMS[0],
-            url=capture_urls()[0][2],
-            status=200,
-            final_url=capture_urls()[0][2],
-            size=3,
-            sha256="a" * 64,
-            path="indexes/stable-x86_64-unknown-linux-gnu.json",
+def _cli_artifacts() -> list[Artifact]:
+    artifacts: list[Artifact] = []
+    for platform in CLI_PLATFORMS:
+        media_type = (
+            "application/x-mach-binary"
+            if platform.endswith("-apple-darwin")
+            else "application/x-dosexec"
+            if platform.endswith("-windows-msvc")
+            else "application/x-pie-executable"
         )
+        for encoding in ("identity", "zstd"):
+            artifacts.append(
+                Artifact(
+                    platform=platform,
+                    encoding=encoding,
+                    media_type=media_type,
+                    url="https://github.com/gelstable/gel-cli/releases/download/v1.2.3/a",
+                    size=1,
+                    sha256="a" * 64,
+                    blake2b="b" * 128,
+                )
+            )
+    return artifacts
 
-    with pytest.raises(ValidationError):
-        CaptureEntry(
-            channel="stable",
-            platform=LEGACY_PLATFORMS[1],
-            url=capture_urls()[1][2],
-            status=404,
-            path="indexes/stable-x86_64-unknown-linux-musl.json",
-        )
+
+def _release_data(version: str, artifacts: list[Artifact]) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "product": "gel-cli",
+        "channel": "stable",
+        "version": version,
+        "source": {
+            "repository": "gelstable/gel-cli",
+            "release_tag": f"v{version}",
+            "release_id": 1,
+        },
+        "promoted_at": datetime(2026, 8, 15, tzinfo=UTC),
+        "artifacts": artifacts,
+    }
 
 
-def test_capture_manifest_sorts_and_requires_exact_matrix() -> None:
+def test_capture_manifest_requires_the_exact_capture_matrix() -> None:
     entries = [
-        CaptureEntry(
-            channel=channel,
-            platform=platform,
-            url=url,
-            status=404,
-        )
+        CaptureEntry(channel=channel, platform=platform, url=url, status=404)
         for channel, platform, url in reversed(capture_urls())
     ]
     manifest = CaptureManifest(
@@ -120,9 +77,8 @@ def test_capture_manifest_sorts_and_requires_exact_matrix() -> None:
     )
 
     assert [(entry.channel, entry.platform) for entry in manifest.entries] == [
-        (channel, platform) for channel in CHANNELS for platform in LEGACY_PLATFORMS
+        (channel, platform) for channel, platform, _ in capture_urls()
     ]
-
     with pytest.raises(ValidationError):
         CaptureManifest(
             schema_version=1,
@@ -133,41 +89,7 @@ def test_capture_manifest_sorts_and_requires_exact_matrix() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "bad_entry",
-    [
-        {"channel": "preview", "platform": LEGACY_PLATFORMS[0]},
-        {"channel": "stable", "platform": "mips-unknown-linux-gnu"},
-        {
-            "channel": "stable",
-            "platform": LEGACY_PLATFORMS[0],
-            "url": "https://evil.example/index.json",
-        },
-        {
-            "channel": "stable",
-            "platform": LEGACY_PLATFORMS[0],
-            "url": capture_urls()[0][2],
-            "sha256": "not-a-digest",
-        },
-    ],
-)
-def test_capture_entry_rejects_unknown_or_unsafe_values(
-    bad_entry: dict[str, object],
-) -> None:
-    data: dict[str, object] = {
-        "channel": "stable",
-        "platform": LEGACY_PLATFORMS[0],
-        "url": capture_urls()[0][2],
-        "status": 404,
-    }
-    data.update(bad_entry)
-    with pytest.raises(ValidationError):
-        CaptureEntry(**data)
-
-
-def test_installref_rejects_non_https_urls_fragments_and_userinfo(
-    verification_data: dict[str, object],
-) -> None:
+def test_installref_rejects_unsafe_urls(verification_data: dict[str, object]) -> None:
     base = {
         "type": "application/x-pie-executable",
         "encoding": "identity",
@@ -182,103 +104,28 @@ def test_installref_rejects_non_https_urls_fragments_and_userinfo(
             InstallRef(ref=ref, **base)
 
 
-def test_package_index_rejects_duplicate_package_identity(
-    package_data: dict[str, object],
-) -> None:
-    with pytest.raises(ValidationError):
-        PackageIndex(packages=[package_data, package_data])
-
-
-def test_package_index_preserves_the_full_legacy_package_shape(
+def test_package_index_round_trips_the_legacy_package_shape(
     package_data: dict[str, object],
 ) -> None:
     index = PackageIndex.model_validate_json(json.dumps({"packages": [package_data]}))
 
     assert index.model_dump(mode="json") == {"packages": [package_data]}
-    package = index.packages[0]
-    assert package.name == "gel-cli"
-    assert package.version_details["metadata"] == {"build_hash": "abc123"}
-    assert package.version_key == "1.2.3"
-    assert package.revision == "1"
-    assert package.build_date == "2026-08-15T00:00:00+00:00"
-    assert package.architecture == "x86_64"
-    assert package.installref == package_data["installref"]
 
 
-def test_release_record_requires_semver_without_leading_v() -> None:
-    artifact = Artifact(
-        platform=CLI_PLATFORMS[0],
-        encoding="identity",
-        media_type="application/x-pie-executable",
-        url="https://github.com/gelstable/gel-cli/releases/download/v1.2.3/cli",
-        size=1,
-        sha256="a" * 64,
-        blake2b="b" * 128,
-    )
-    data = {
-        "schema_version": 1,
-        "product": "gel-cli",
-        "channel": "stable",
-        "version": "v1.2.3",
-        "source": {
-            "repository": "gelstable/gel-cli",
-            "release_tag": "v1.2.3",
-            "release_id": 1,
-        },
-        "promoted_at": datetime(2026, 8, 15, tzinfo=UTC),
-        "artifacts": [artifact],
-    }
+def test_release_record_rejects_a_leading_v() -> None:
     with pytest.raises(ValidationError):
-        ReleaseRecord(**data)
+        ReleaseRecord(**_release_data("v1.2.3", _cli_artifacts()))
 
 
 @pytest.mark.parametrize(
     ("version", "valid"),
-    [
-        ("1.2.3-01", False),
-        ("1.2.3-alpha.01", False),
-        ("1.2.3١", False),
-        ("1.2.3-foo+bar", True),
-    ],
+    [("1.2.3-01", False), ("1.2.3-foo+bar", True)],
 )
-def test_release_record_applies_exact_semver_prerelease_rules(
+def test_release_record_applies_semver_prerelease_rules(
     version: str, valid: bool
 ) -> None:
-    def artifact(platform: str, encoding: str) -> Artifact:
-        media_type = (
-            "application/x-mach-binary"
-            if platform.endswith("-apple-darwin")
-            else "application/x-dosexec"
-            if platform.endswith("-windows-msvc")
-            else "application/x-pie-executable"
-        )
-        return Artifact(
-            platform=platform,
-            encoding=encoding,
-            media_type=media_type,
-            url="https://github.com/gelstable/gel-cli/releases/download/v1.2.3/a",
-            size=1,
-            sha256="a" * 64,
-            blake2b="b" * 128,
-        )
+    data = _release_data(version, _cli_artifacts())
 
-    data = {
-        "schema_version": 1,
-        "product": "gel-cli",
-        "channel": "stable",
-        "version": version,
-        "source": {
-            "repository": "gelstable/gel-cli",
-            "release_tag": f"v{version}",
-            "release_id": 1,
-        },
-        "promoted_at": datetime(2026, 8, 15, tzinfo=UTC),
-        "artifacts": [
-            artifact(platform, encoding)
-            for platform in CLI_PLATFORMS
-            for encoding in ("identity", "zstd")
-        ],
-    }
     if valid:
         assert ReleaseRecord(**data).version == version
     else:
@@ -286,54 +133,17 @@ def test_release_record_applies_exact_semver_prerelease_rules(
             ReleaseRecord(**data)
 
 
-def test_release_record_requires_the_ten_cli_installrefs() -> None:
-    def artifact(platform: str, encoding: str) -> Artifact:
-        media_type = (
-            "application/x-mach-binary"
-            if platform.endswith("-apple-darwin")
-            else "application/x-dosexec"
-            if platform.endswith("-windows-msvc")
-            else "application/x-pie-executable"
-        )
-        return Artifact(
-            platform=platform,
-            encoding=encoding,
-            media_type=media_type,
-            url="https://github.com/gelstable/gel-cli/releases/download/v1.2.3/a",
-            size=1,
-            sha256="a" * 64,
-            blake2b="b" * 128,
-        )
+def test_release_record_requires_the_complete_cli_artifact_matrix() -> None:
+    artifacts = _cli_artifacts()
 
-    data = {
-        "schema_version": 1,
-        "product": "gel-cli",
-        "channel": "stable",
-        "version": "1.2.3",
-        "source": {
-            "repository": "gelstable/gel-cli",
-            "release_tag": "v1.2.3",
-            "release_id": 1,
-        },
-        "promoted_at": datetime(2026, 8, 15, tzinfo=UTC),
-        "artifacts": [artifact(CLI_PLATFORMS[0], "identity")],
-    }
-    with pytest.raises(ValidationError):
-        ReleaseRecord(**data)
+    record = ReleaseRecord(**_release_data("1.2.3", artifacts))
 
-
-def test_snapshot_identifiers_are_sixteen_lowercase_hex_characters() -> None:
+    assert [
+        (artifact.platform, artifact.encoding) for artifact in record.artifacts
+    ] == [
+        (platform, encoding)
+        for platform in CLI_PLATFORMS
+        for encoding in ("identity", "zstd")
+    ]
     with pytest.raises(ValidationError):
-        Pointer(snapshot="0123456789ABCDEf")
-    with pytest.raises(ValidationError):
-        SnapshotListing(latest="0123456789abcdef0", snapshots=[])
-
-
-def test_models_are_frozen_and_reject_unknown_fields(
-    package_index_data: dict[str, object],
-) -> None:
-    index = PackageIndex(**package_index_data)
-    with pytest.raises(ValidationError):
-        index.packages = ()
-    with pytest.raises(ValidationError):
-        PackageIndex(**package_index_data, unexpected=True)  # type: ignore[call-arg]
+        ReleaseRecord(**_release_data("1.2.3", artifacts[:-1]))

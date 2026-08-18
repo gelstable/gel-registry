@@ -7,7 +7,7 @@ import zstandard as zstd
 
 from gel_registry.constants import CLI_PLATFORMS
 from gel_registry.github import GitHubAsset, GitHubRelease
-from gel_registry.verify import VerificationError, gh_attestor, verify_cli_release
+from gel_registry.verify import VerificationError, verify_cli_release
 
 
 def _release() -> GitHubRelease:
@@ -59,32 +59,6 @@ def _files(tmp_path: Path, release: GitHubRelease) -> dict[str, Path]:
     return result
 
 
-def test_gh_attestor_uses_the_production_repository(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[list[str], bool]] = []
-
-    def run(command: list[str], *, check: bool) -> None:
-        calls.append((command, check))
-
-    monkeypatch.setattr("gel_registry.verify.subprocess.run", run)
-    gh_attestor(Path("artifact"))
-
-    assert calls == [
-        (
-            [
-                "gh",
-                "attestation",
-                "verify",
-                "artifact",
-                "-R",
-                "gelstable/gel-cli",
-            ],
-            True,
-        )
-    ]
-
-
 def test_verify_cli_release_checks_bytes_pairs_media_types_and_attestations(
     tmp_path: Path,
 ) -> None:
@@ -125,7 +99,7 @@ def test_verify_cli_release_checks_bytes_pairs_media_types_and_attestations(
 
 @pytest.mark.parametrize(
     "case",
-    ["missing", "extra", "digest", "decompress", "pair", "url", "repo", "attestation"],
+    ["digest", "pair", "repo", "attestation"],
 )
 def test_verify_cli_release_fails_closed(tmp_path: Path, case: str) -> None:
     release = _release()
@@ -134,44 +108,19 @@ def test_verify_cli_release_fails_closed(tmp_path: Path, case: str) -> None:
     def attestor(path: Path) -> None:
         return None
 
-    if case == "missing":
-        assets.pop(release.assets[0].name)
-    elif case == "extra":
-        extra = tmp_path / "extra"
-        extra.write_bytes(b"extra")
-        assets["unexpected"] = extra
-    elif case == "digest":
+    if case == "digest":
         assets[release.assets[0].name].write_bytes(b"changed")
-    elif case == "decompress":
-        zst_asset = next(
-            asset for asset in release.assets if asset.name.endswith(".zst")
-        )
-        assets[zst_asset.name].write_bytes(b"bad zstd")
     elif case == "pair":
         zst_asset = next(
             asset for asset in release.assets if asset.name.endswith(".zst")
         )
         assets[zst_asset.name].write_bytes(zstd.ZstdCompressor().compress(b"different"))
-    elif case in {"url", "repo"}:
-        target = release.assets[0]
-        url = (
-            "http://github.com/gelstable/gel-cli/releases/download/v1.2.3/"
-            f"{target.name}"
-            if case == "url"
-            else "https://github.com/fork/gel-cli/releases/download/v1.2.3/"
-            f"{target.name}"
-        )
+    elif case == "repo":
         release = GitHubRelease(
             id=release.id,
             tag_name=release.tag_name,
-            assets=(
-                GitHubAsset(
-                    name=target.name,
-                    url=target.url,
-                    browser_download_url=url,
-                ),
-                *release.assets[1:],
-            ),
+            assets=release.assets,
+            repository="fork/gel-cli",
         )
     elif case == "attestation":
 

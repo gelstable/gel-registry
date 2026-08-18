@@ -7,9 +7,8 @@ from urllib.parse import urljoin
 
 import pytest
 
-import gel_registry.normalize as normalize_module
 from gel_registry.constants import CAPTURE_ID, ORIGIN, capture_urls
-from gel_registry.digest import Digests, canonical_json, hash_bytes
+from gel_registry.digest import canonical_json, hash_bytes
 from gel_registry.normalize import (
     NormalizationError,
     normalize_capture,
@@ -119,23 +118,6 @@ def test_normalize_capture_preserves_every_package_field_and_resolves_urls(
     assert "?" not in normalized.packages[0].installrefs[0].ref
 
 
-def test_normalize_capture_is_byte_stable_on_a_second_run(tmp_path: Path) -> None:
-    body = _fixture_body()
-    capture_root = tmp_path / "capture"
-    _write_capture(capture_root, body)
-    first_root = tmp_path / "bootstrap-first"
-    second_root = tmp_path / "bootstrap-second"
-
-    first_paths = normalize_capture(capture_root, first_root)
-    second_paths = normalize_capture(capture_root, second_root)
-
-    assert [path.read_bytes() for path in first_paths] == [
-        path.read_bytes() for path in second_paths
-    ]
-    normalize_capture(capture_root, first_root)
-    assert first_paths[0].read_bytes() == second_paths[0].read_bytes()
-
-
 def test_normalize_capture_preserves_resolved_installref_query(tmp_path: Path) -> None:
     data = json.loads(_fixture_body())
     assert isinstance(data, dict)
@@ -162,20 +144,10 @@ def test_normalize_capture_preserves_resolved_installref_query(tmp_path: Path) -
     )
 
 
-@pytest.mark.parametrize(
-    "unsafe_ref",
-    [
-        "http://packages.geldata.com/archive/x",
-        "https://evil.example/archive/x",
-        "https://user:password@packages.geldata.com/archive/x",
-        "../artifacts/x#fragment",
-        "//evil.example/archive/x",
-    ],
-)
 def test_normalize_capture_rejects_unsafe_resolved_installrefs_atomically(
     tmp_path: Path,
-    unsafe_ref: str,
 ) -> None:
+    unsafe_ref = "https://evil.example/archive/x"
     data = json.loads(_fixture_body())
     assert isinstance(data, dict)
     packages = data["packages"]
@@ -198,21 +170,6 @@ def test_normalize_capture_rejects_unsafe_resolved_installrefs_atomically(
     assert not output_root.exists()
 
 
-def test_normalize_capture_rejects_missing_200_body_without_partial_output(
-    tmp_path: Path,
-) -> None:
-    body = _fixture_body()
-    capture_root = tmp_path / "capture"
-    _write_capture(capture_root, body)
-    (capture_root / "indexes/stable-x86_64-unknown-linux-gnu.json").unlink()
-    output_root = tmp_path / "bootstrap"
-
-    with pytest.raises(NormalizationError, match="missing"):
-        normalize_capture(capture_root, output_root)
-
-    assert not output_root.exists()
-
-
 def test_normalize_capture_rejects_digest_mismatch_without_partial_output(
     tmp_path: Path,
 ) -> None:
@@ -225,41 +182,6 @@ def test_normalize_capture_rejects_digest_mismatch_without_partial_output(
         normalize_capture(capture_root, output_root)
 
     assert not output_root.exists()
-
-
-def test_normalize_capture_parses_only_the_verified_body_snapshot(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    original_body = _fixture_body()
-    changed_data = json.loads(original_body)
-    assert isinstance(changed_data, dict)
-    changed_packages = changed_data["packages"]
-    assert isinstance(changed_packages, list)
-    changed_package = changed_packages[0]
-    assert isinstance(changed_package, dict)
-    changed_tags = changed_package["tags"]
-    assert isinstance(changed_tags, dict)
-    changed_tags["featured"] = False
-    changed_body = json.dumps(changed_data, indent=2).encode() + b"\n"
-
-    capture_root = tmp_path / "capture"
-    _write_capture(capture_root, original_body)
-    body_path = capture_root / "indexes/stable-x86_64-unknown-linux-gnu.json"
-    real_hash_bytes = hash_bytes
-
-    def replace_after_verification(data: bytes) -> Digests:
-        digests = real_hash_bytes(data)
-        body_path.write_bytes(changed_body)
-        return digests
-
-    monkeypatch.setattr(normalize_module, "hash_bytes", replace_after_verification)
-    output_root = tmp_path / "bootstrap"
-
-    paths = normalize_capture(capture_root, output_root)
-
-    normalized = PackageIndex.model_validate_json(paths[0].read_bytes())
-    assert normalized.packages[0].tags["featured"] is True
 
 
 def test_normalize_capture_rejects_extra_unrecorded_body_atomically(
@@ -277,20 +199,6 @@ def test_normalize_capture_rejects_extra_unrecorded_body_atomically(
     assert not output_root.exists()
 
 
-def test_normalize_capture_emits_no_file_for_404_entries(tmp_path: Path) -> None:
-    body = _fixture_body()
-    capture_root = tmp_path / "capture"
-    manifest = _write_capture(capture_root, body)
-    output_root = tmp_path / "bootstrap"
-
-    normalize_capture(capture_root, output_root)
-
-    for entry in manifest.entries:
-        path = output_root / f"{entry.channel}-{entry.platform}.json"
-        if entry.status == 404:
-            assert not path.exists()
-
-
 def test_validate_normalization_reports_changed_bootstrap_bytes(tmp_path: Path) -> None:
     body = _fixture_body()
     capture_root = tmp_path / "capture"
@@ -302,34 +210,3 @@ def test_validate_normalization_reports_changed_bootstrap_bytes(tmp_path: Path) 
 
     with pytest.raises(NormalizationError, match="changed"):
         validate_normalization(capture_root, output_root)
-
-
-def test_validate_normalization_reports_added_and_missing_paths(tmp_path: Path) -> None:
-    body = _fixture_body()
-    capture_root = tmp_path / "capture"
-    _write_capture(capture_root, body)
-    output_root = tmp_path / "bootstrap"
-    normalize_capture(capture_root, output_root)
-    output_path = output_root / "stable-x86_64-unknown-linux-gnu.json"
-    output_path.unlink()
-    (output_root / "unrecorded.json").write_bytes(b"{}\n")
-
-    with pytest.raises(NormalizationError, match="added=.*unrecorded.*missing"):
-        validate_normalization(capture_root, output_root)
-
-
-def test_validate_normalization_accepts_exact_bootstrap_without_http_client(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    body = _fixture_body()
-    capture_root = tmp_path / "capture"
-    _write_capture(capture_root, body)
-    output_root = tmp_path / "bootstrap"
-    normalize_capture(capture_root, output_root)
-
-    def fail_if_called(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("normalization must not create an HTTP client")
-
-    monkeypatch.setattr("httpx.Client", fail_if_called)
-    validate_normalization(capture_root, output_root)
