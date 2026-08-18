@@ -56,11 +56,11 @@ The required local check is reproducible from a clean checkout:
 uv run pytest -q && uv run mypy src tests && uv run ruff check . && uv run ruff format --check .
 ```
 
-The bootstrap-publication and promotion workflows may have job-scoped
-`contents: write` and `pull-requests: write` only where they create their
-review branch and pull request. Their workflow-level permissions remain
-read-only. No workflow uses `pull_request_target`, a personal access token, or
-force-push behavior. Review the Actions audit log after changing permissions.
+The promotion workflow may have job-scoped `contents: write` and
+`pull-requests: write` only where it creates its review branch and pull request.
+Its workflow-level permissions remain read-only. No workflow uses
+`pull_request_target`, a personal access token, or force-push behavior. Review
+the Actions audit log after changing permissions.
 
 ## Vercel Git integration
 

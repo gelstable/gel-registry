@@ -12,7 +12,6 @@ import pytest
 
 WORKFLOW_ROOT = Path(__file__).parents[1] / ".github" / "workflows"
 WORKFLOW_NAMES = {
-    "publish-bootstrap.yml",
     "promote.yml",
     "validate.yml",
 }
@@ -59,8 +58,12 @@ def _walk(value: object) -> list[tuple[str, object]]:
 @pytest.fixture(scope="module")
 def workflows() -> dict[str, dict[str, Any]]:
     paths = sorted(WORKFLOW_ROOT.glob("*.y*ml"))
-    assert {path.name for path in paths} == WORKFLOW_NAMES
     return {path.name: _load_yaml(path) for path in paths}
+
+
+def test_workflow_inventory_matches_operational_automation() -> None:
+    paths = sorted(WORKFLOW_ROOT.glob("*.y*ml"))
+    assert {path.name for path in paths} == WORKFLOW_NAMES
 
 
 def test_every_third_party_action_is_pinned_to_a_full_sha(
@@ -78,7 +81,7 @@ def test_every_third_party_action_is_pinned_to_a_full_sha(
 def test_workflows_have_explicit_least_privilege_permissions(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
-    writer_workflows = {"publish-bootstrap.yml", "promote.yml"}
+    writer_workflows = {"promote.yml"}
     for name, workflow in workflows.items():
         permissions = workflow.get("permissions")
         assert isinstance(permissions, dict), f"{name}: missing workflow permissions"
@@ -106,7 +109,6 @@ def test_workflows_have_explicit_least_privilege_permissions(
 def test_triggers_match_their_operational_scope(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
-    assert set(workflows["publish-bootstrap.yml"]["on"]) == {"workflow_dispatch"}
     assert set(workflows["promote.yml"]["on"]) == {
         "schedule",
         "workflow_dispatch",
@@ -125,22 +127,23 @@ def test_validation_scopes_remote_checks_to_release_changes(
     assert "capture-rehearsal" not in workflows["validate.yml"]["jobs"]
 
 
-def test_retained_writer_branches_reject_unrelated_committed_paths(
+def test_promotion_workflow_delegates_to_python_script(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
-    expected = {
-        "publish-bootstrap.yml": r"!~ /^(pointers|public)\//",
-        "promote.yml": r"!~ /^(releases\/gel-cli|pointers|public)\//",
-    }
-    for name, pattern in expected.items():
-        workflow = workflows[name]
-        text = "\n".join(
-            str(step.get("run", ""))
-            for job in workflow["jobs"].values()
-            if isinstance(job, dict)
-            for step in job.get("steps", [])
-            if isinstance(step, dict)
-        )
-        assert 'git diff --name-only "refs/remotes/origin/$DEFAULT_BRANCH"' in text
-        assert "unexpected_branch_paths" in text
-        assert pattern in text
+    workflow = workflows["promote.yml"]
+    steps = [
+        step
+        for job in workflow["jobs"].values()
+        if isinstance(job, dict)
+        for step in job.get("steps", [])
+        if isinstance(step, dict)
+    ]
+    promotion = next(
+        step
+        for step in steps
+        if step.get("name") == "Promote one verified release per branch"
+    )
+    assert promotion.get("run") == "uv run python .github/scripts/promote.py"
+    assert promotion.get("env", {}).get("DEFAULT_BRANCH") == (
+        "${{ github.event.repository.default_branch }}"
+    )
