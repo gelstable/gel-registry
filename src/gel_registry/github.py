@@ -6,17 +6,28 @@ import ctypes
 import errno
 import hashlib
 import os
+import re
 import shutil
 import sys
 import tempfile
 from collections.abc import Iterable, Mapping
 from contextlib import AbstractContextManager, closing
-from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .constants import CLI_PLATFORMS, PRODUCT_REPOSITORIES
 from .schema import parse_semver, semver_key
@@ -56,22 +67,63 @@ _ASSET_DELIVERY_HOSTS = frozenset(
 _RENAME_EXCL = 0x00000004
 _RENAME_NOREPLACE = 0x00000001
 _AT_FDCWD = -100
+_TAG_PREFIX = re.compile(r"^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$")
+
+
+def _version_from_tag(tag: str) -> str | None:
+    if tag.startswith("v"):
+        version = tag[1:]
+        if parse_semver(version) is not None:
+            return version
+    prefix, separator, version = tag.rpartition("-v")
+    if not separator or not _TAG_PREFIX.fullmatch(prefix):
+        return None
+    return version if parse_semver(version) is not None else None
 
 
 class GitHubError(RuntimeError):
     """Raised when GitHub data cannot be trusted or downloaded."""
 
 
-@dataclass(frozen=True, slots=True)
-class GitHubAsset:
+_GITHUB_MODEL_CONFIG = ConfigDict(extra="ignore", frozen=True)
+
+
+class GitHubAsset(BaseModel):
     """The release-asset metadata needed by discovery and verification."""
 
-    name: str
-    url: str
-    browser_download_url: str | None = None
-    id: int | None = None
-    content_type: str | None = None
-    size: int | None = None
+    model_config = _GITHUB_MODEL_CONFIG
+
+    name: StrictStr
+    url: StrictStr
+    browser_download_url: StrictStr | None = None
+    id: StrictInt | None = Field(default=None, gt=0)
+    content_type: StrictStr | None = None
+    size: StrictInt | None = Field(default=None, ge=0)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        if not value:
+            raise ValueError("asset has no valid name")
+        if "/" in value or "\\" in value or value in {".", ".."} or "\x00" in value:
+            raise ValueError(f"asset {value!r} has an unsafe name")
+        return value
+
+    @field_validator("url", "browser_download_url")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        if value == "":
+            raise ValueError("asset URL must not be empty")
+        return value
+
+    @field_validator("size", mode="before")
+    @classmethod
+    def normalize_size(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None
+        return value
 
     @property
     def download_url(self) -> str:
@@ -80,18 +132,59 @@ class GitHubAsset:
         return self.browser_download_url or self.url
 
 
-@dataclass(frozen=True, slots=True)
-class GitHubRelease:
+class GitHubRelease(BaseModel):
     """A published GitHub release from the allowlisted repository."""
 
-    id: int
-    tag_name: str
+    model_config = _GITHUB_MODEL_CONFIG
+
+    id: StrictInt = Field(gt=0)
+    tag_name: StrictStr
     assets: tuple[GitHubAsset, ...]
-    draft: bool = False
-    prerelease: bool = False
-    repository: str = GITHUB_REPOSITORY
-    url: str | None = None
-    html_url: str | None = None
+    draft: StrictBool = False
+    prerelease: StrictBool = False
+    repository: StrictStr = GITHUB_REPOSITORY
+    url: StrictStr | None = None
+    html_url: StrictStr | None = None
+    version: StrictStr = Field(default="", exclude=True, repr=False)
+    repositories: frozenset[str] = Field(
+        default_factory=frozenset, exclude=True, repr=False
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_payload(cls, value: object) -> object:
+        if not isinstance(value, Mapping):
+            return value
+        data = dict(value)
+        tag_name = data.get("tag_name")
+        if isinstance(tag_name, str):
+            version = _version_from_tag(tag_name)
+            if version is None:
+                raise ValueError(f"invalid release tag: {tag_name!r}")
+            data["version"] = version
+        repositories = _release_repositories(data)
+        repository = data.get("repository")
+        if not repositories and isinstance(repository, str) and "/" in repository:
+            repositories = frozenset({repository})
+        data["repositories"] = repositories
+        data["repository"] = (
+            sorted(repositories)[0] if repositories else GITHUB_REPOSITORY
+        )
+        return data
+
+    @field_validator("tag_name")
+    @classmethod
+    def validate_tag_name(cls, value: str) -> str:
+        if not value:
+            raise ValueError("release tag must not be empty")
+        return value
+
+    @model_validator(mode="after")
+    def validate_release(self) -> GitHubRelease:
+        names = [asset.name for asset in self.assets]
+        if len(names) != len(set(names)):
+            raise ValueError(f"release {self.id} has duplicate asset names")
+        return self
 
     @property
     def release_id(self) -> int:
@@ -105,15 +198,6 @@ class GitHubRelease:
 
         return self.tag_name
 
-    @property
-    def version(self) -> str:
-        """Return the SemVer component without the leading ``v``."""
-
-        if not self.tag_name.startswith("v"):
-            raise GitHubError(f"release tag is not v<semver>: {self.tag_name!r}")
-        return self.tag_name[1:]
-
-
 def canonical_asset_names() -> tuple[str, ...]:
     """Return canonical identity/zstd asset names in registry order."""
 
@@ -123,35 +207,6 @@ def canonical_asset_names() -> tuple[str, ...]:
         identity = f"gel-cli-{platform}{suffix}"
         names.extend((identity, f"{identity}.zst"))
     return tuple(names)
-
-
-def _as_mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, dict):
-        raise GitHubError(f"{label} is not a JSON object")
-    return cast(Mapping[str, object], value)
-
-
-def _required_string(data: Mapping[str, object], key: str, label: str) -> str:
-    value = data.get(key)
-    if not isinstance(value, str) or not value:
-        raise GitHubError(f"{label} has no valid {key}")
-    return value
-
-
-def _required_integer(data: Mapping[str, object], key: str, label: str) -> int:
-    value = data.get(key)
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise GitHubError(f"{label} has no valid positive integer {key}")
-    return value
-
-
-def _optional_integer(data: Mapping[str, object], key: str, label: str) -> int | None:
-    value = data.get(key)
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise GitHubError(f"{label} has an invalid {key}")
-    return value
 
 
 def _repository_from_url(value: str) -> str | None:
@@ -190,88 +245,12 @@ def _release_repositories(data: Mapping[str, object]) -> frozenset[str]:
     return frozenset(repositories)
 
 
-def _release_repository(data: Mapping[str, object]) -> str | None:
-    repositories = _release_repositories(data)
-    return sorted(repositories)[0] if repositories else None
-
-
-def _parse_asset(value: object, release_label: str) -> GitHubAsset:
-    data = _as_mapping(value, f"asset in {release_label}")
-    name = _required_string(data, "name", f"asset in {release_label}")
-    if "/" in name or "\\" in name or name in {".", ".."} or "\x00" in name:
-        raise GitHubError(f"asset {name!r} has an unsafe name")
-    url = _required_string(data, "url", f"asset {name!r}")
-    browser_url = data.get("browser_download_url")
-    if browser_url is not None and (
-        not isinstance(browser_url, str) or not browser_url
-    ):
-        raise GitHubError(f"asset {name!r} has an invalid browser URL")
-    parsed_size = data.get("size")
-    if (
-        isinstance(parsed_size, bool)
-        or not isinstance(parsed_size, int)
-        or parsed_size < 0
-    ):
-        parsed_size = None
-    return GitHubAsset(
-        name=name,
-        url=url,
-        browser_download_url=browser_url if isinstance(browser_url, str) else None,
-        id=_optional_integer(data, "id", f"asset {name!r}"),
-        content_type=(
-            cast(str, data["content_type"])
-            if isinstance(data.get("content_type"), str)
-            else None
-        ),
-        size=parsed_size,
-    )
-
-
 def _parse_release(value: object) -> tuple[GitHubRelease, frozenset[str]]:
-    data = _as_mapping(value, "release")
-    release_id = _required_integer(data, "id", "release")
-    tag_name = _required_string(data, "tag_name", f"release {release_id}")
-    draft = data.get("draft", False)
-    prerelease = data.get("prerelease", False)
-    if not isinstance(draft, bool) or not isinstance(prerelease, bool):
-        raise GitHubError(f"release {release_id} has invalid publication flags")
-    assets_value = data.get("assets")
-    if not isinstance(assets_value, list):
-        raise GitHubError(f"release {release_id} has no asset list")
-    assets = tuple(
-        _parse_asset(asset, f"release {release_id}") for asset in assets_value
-    )
-    names = [asset.name for asset in assets]
-    if len(names) != len(set(names)):
-        raise GitHubError(f"release {release_id} has duplicate asset names")
-    repositories = _release_repositories(data)
-    repository = sorted(repositories)[0] if repositories else None
-    return (
-        GitHubRelease(
-            id=release_id,
-            tag_name=tag_name,
-            assets=assets,
-            draft=draft,
-            prerelease=prerelease,
-            repository=repository or GITHUB_REPOSITORY,
-            url=(cast(str, data["url"]) if isinstance(data.get("url"), str) else None),
-            html_url=(
-                cast(str, data["html_url"])
-                if isinstance(data.get("html_url"), str)
-                else None
-            ),
-        ),
-        repositories,
-    )
-
-
-def _version_from_tag(tag: str) -> str | None:
-    if not tag.startswith("v"):
-        return None
-    version = tag[1:]
-    if parse_semver(version) is None:
-        return None
-    return version
+    try:
+        release = GitHubRelease.model_validate(value)
+    except ValidationError as exc:
+        raise GitHubError(f"invalid GitHub release: {exc}") from exc
+    return release, release.repositories
 
 
 def _known_version_strings(known_versions: Iterable[object]) -> frozenset[str]:
@@ -426,8 +405,7 @@ def discover_cli_releases(
     for release in by_tag.values():
         if release.draft or release.prerelease:
             continue
-        version = _version_from_tag(release.tag_name)
-        if version is None or version in known:
+        if release.version in known:
             continue
         names = {asset.name for asset in release.assets}
         if not expected_names.issubset(names):

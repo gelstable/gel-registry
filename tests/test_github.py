@@ -10,6 +10,7 @@ from gel_registry.constants import CLI_PLATFORMS
 from gel_registry.github import (
     GITHUB_REPOSITORY,
     GitHubError,
+    GitHubRelease,
     discover_cli_releases,
     download_assets,
 )
@@ -78,9 +79,8 @@ def test_discovery_filters_and_sorts_releases_across_pages() -> None:
         ],
         2: [
             _release("v1.10.0", 110),
-            _release("v3.0.0-rc.1", 301, prerelease=True),
-            _release("v4.0", 400),
-            _release("not-a-version", 401),
+            _release("gel-server-v3.0.0-rc.1", 301, prerelease=True),
+            _release("gel-lsp-v4.0.0", 400),
         ],
         3: [],
     }
@@ -104,8 +104,39 @@ def test_discovery_filters_and_sorts_releases_across_pages() -> None:
     with _client(handler) as client:
         releases = discover_cli_releases(client, known_versions={"1.2.3"})
 
-    assert [release.version for release in releases] == ["1.10.0", "2.0.0"]
-    assert [release.release_id for release in releases] == [110, 200]
+    assert [release.version for release in releases] == [
+        "1.10.0",
+        "2.0.0",
+        "4.0.0",
+    ]
+    assert [release.release_id for release in releases] == [110, 200, 400]
+
+
+@pytest.mark.parametrize(
+    ("tag", "version"),
+    (
+        ("v8.0.0", "8.0.0"),
+        ("gel-server-v8.0.0-rc1", "8.0.0-rc1"),
+        ("gel-lsp-v8.0.0", "8.0.0"),
+        ("vscode-v8.0.0", "8.0.0"),
+    ),
+)
+def test_release_model_parses_reasonable_product_tags(
+    tag: str, version: str
+) -> None:
+    release = GitHubRelease.model_validate(_release(tag))
+
+    assert release.version == version
+
+
+def test_discovery_rejects_unreasonable_release_tags() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[_release("not-a-version")])
+
+    with _client(handler) as client, pytest.raises(
+        GitHubError, match="invalid release tag"
+    ):
+        discover_cli_releases(client, known_versions=())
 
 
 def test_discovery_rejects_ambiguous_release_ids_and_duplicate_assets() -> None:
