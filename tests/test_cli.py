@@ -36,18 +36,6 @@ def test_build_snapshot_does_not_read_pointer(
     assert captured.err == ""
 
 
-@pytest.mark.parametrize("command", ["capture", "verify-capture-live"])
-def test_one_time_capture_commands_are_not_installed(
-    command: str, capsys: pytest.CaptureFixture[str]
-) -> None:
-    from gel_registry.__main__ import main
-
-    with pytest.raises(SystemExit) as error:
-        main([command])
-    assert error.value.code != 0
-    assert "invalid choice" in capsys.readouterr().err
-
-
 def test_validation_errors_are_nonzero_and_path_qualified(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

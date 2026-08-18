@@ -3,20 +3,27 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import tempfile
 from collections.abc import Callable, Iterable, Sequence
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
 import httpx
 from pydantic import ValidationError
 
-from . import github, normalize, promote, render, validate, verify
+from . import capture, github, normalize, promote, render, validate, verify
 from .constants import CAPTURE_ID
 from .schema import ReleaseRecord
 
 type Handler = Callable[[argparse.Namespace], int]
+
+_RFC3339_UTC = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|\+00:00)"
+)
 
 
 def _capture_root(repo: Path) -> Path:
@@ -30,6 +37,25 @@ def _add_repo(parser: argparse.ArgumentParser) -> None:
         default=Path.cwd(),
         help="repository root (default: current directory)",
     )
+
+
+def _parse_captured_at(value: str) -> datetime:
+    """Parse the one timestamp supplied for a capture attempt."""
+
+    candidate = value
+    if _RFC3339_UTC.fullmatch(candidate) is None:
+        raise argparse.ArgumentTypeError("captured-at must be an RFC3339 UTC timestamp")
+    if candidate.endswith("Z"):
+        candidate = candidate[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "captured-at must be an RFC3339 UTC timestamp"
+        ) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise argparse.ArgumentTypeError("captured-at must be an RFC3339 UTC timestamp")
+    return parsed.astimezone(UTC)
 
 
 def _error_text(error: BaseException) -> str:
@@ -46,6 +72,15 @@ def _print_report(report: validate.ValidationReport) -> int:
     for error in report.errors:
         print(f"error: {_error_text(ValueError(error))}", file=sys.stderr)
     return 1
+
+
+def _run_capture(args: argparse.Namespace) -> int:
+    repo = Path(args.repo)
+    destination = _capture_root(repo)
+    with httpx.Client() as client:
+        manifest = capture.capture_legacy(client, destination, args.captured_at)
+    print(manifest.capture)
+    return 0
 
 
 def _run_normalize(args: argparse.Namespace) -> int:
@@ -168,6 +203,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gel-registry")
     commands = parser.add_subparsers(dest="command", required=True)
 
+    capture_parser = commands.add_parser("capture", help="capture legacy indexes")
+    _add_repo(capture_parser)
+    capture_parser.add_argument(
+        "--captured-at",
+        type=_parse_captured_at,
+        required=True,
+        help="one RFC3339 UTC timestamp for this capture attempt",
+    )
+    capture_parser.set_defaults(handler=_run_capture)
+
     normalize_parser = commands.add_parser(
         "normalize", help="normalize a frozen capture locally"
     )
@@ -267,6 +312,7 @@ if __name__ == "__main__":  # pragma: no cover - exercised by the console script
 
 
 __all__ = [
+    "capture",
     "github",
     "httpx",
     "main",
