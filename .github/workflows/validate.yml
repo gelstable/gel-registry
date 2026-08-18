@@ -14,9 +14,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      capture: ${{ steps.changed.outputs.capture }}
       registry_data: ${{ steps.registry-data.outputs.present }}
-      rehearsal: ${{ steps.changed.outputs.rehearsal }}
       release: ${{ steps.changed.outputs.release }}
     steps:
       - name: Check out the pull request
@@ -33,44 +31,15 @@ jobs:
         id: changed
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin "$BASE_REF"
           base="$(git merge-base HEAD "refs/remotes/origin/$BASE_REF")"
           changed="$(git diff --name-only "$base" HEAD)"
-          capture=false
-          capture_paths=false
-          capture_only=true
-          publication=false
-          rehearsal=false
           release=false
-          while IFS= read -r path; do
-            [[ -z "$path" ]] && continue
-            case "$path" in
-              upstream/packages.geldata.com/legacy-2026-08-bootstrap/*|bootstrap/*)
-                capture_paths=true
-                ;;
-              *)
-                capture_only=false
-                ;;
-            esac
-          done <<<"$changed"
-          if [[ "$capture_paths" == true && "$capture_only" == true && "$HEAD_REF" == "capture/legacy-2026-08-bootstrap" ]]; then
-            capture=true
-          fi
-          if grep -Eq '^(pointers/latest\.json$|public/)' <<<"$changed"; then
-            publication=true
-          fi
           if grep -Eq '^releases/gel-cli/[^/]+\.json$' <<<"$changed"; then
             release=true
           fi
-          if [[ "$capture" == true && "$HEAD_REF" == "capture/legacy-2026-08-bootstrap" ]] || \
-            [[ "$publication" == true && "$release" == false && "$HEAD_REF" == "publish/legacy-2026-08-bootstrap" ]]; then
-            rehearsal=true
-          fi
-          echo "capture=$capture" >> "$GITHUB_OUTPUT"
-          echo "rehearsal=$rehearsal" >> "$GITHUB_OUTPUT"
           echo "release=$release" >> "$GITHUB_OUTPUT"
 
   local:
@@ -113,45 +82,13 @@ jobs:
           uv run mypy src tests
           uv run pytest -q
 
-      - name: Check the pre-publication capture phase
-        if: needs.scope.outputs.capture == 'true'
-        run: uv run gel-registry validate-capture --repo . --base "$BASE_TREE"
-
       - name: Check normalization drift
-        if: >-
-          needs.scope.outputs.registry_data == 'true' &&
-          needs.scope.outputs.capture != 'true'
+        if: needs.scope.outputs.registry_data == 'true'
         run: uv run gel-registry normalize --repo . --check
 
       - name: Check render drift and immutable history
-        if: >-
-          needs.scope.outputs.registry_data == 'true' &&
-          needs.scope.outputs.capture != 'true'
+        if: needs.scope.outputs.registry_data == 'true'
         run: uv run gel-registry validate --repo . --base "$BASE_TREE"
-
-  capture-rehearsal:
-    needs: [scope, local]
-    if: needs.scope.outputs.rehearsal == 'true'
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - name: Check out the pull request
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 1
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
-        with:
-          version: "0.11.6"
-
-      - name: Install locked dependencies
-        run: uv sync --locked
-
-      - name: Run the explicit live capture rehearsal
-        run: uv run gel-registry verify-capture-live --repo .
 
   release-remotes:
     needs: [scope, local]

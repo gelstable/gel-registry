@@ -84,8 +84,6 @@ def test_operations_runbook_covers_validation_protection_and_static_operations()
         "disable force pushes",
         "Actions",
         "Vercel",
-        "Capture legacy bootstrap",
-        "Publish legacy bootstrap",
         "Promote stable Gel CLI releases",
         "rollback changes the pointer",
         "public/registry.json",

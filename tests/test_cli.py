@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from argparse import ArgumentTypeError
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -148,79 +147,16 @@ def test_validate_capture_uses_the_prepublication_gate(
     assert capsys.readouterr().err == ""
 
 
-def test_capture_requires_explicit_timestamp() -> None:
+@pytest.mark.parametrize("command", ["capture", "verify-capture-live"])
+def test_one_time_capture_commands_are_not_installed(
+    command: str, capsys: pytest.CaptureFixture[str]
+) -> None:
     from gel_registry.__main__ import main
 
     with pytest.raises(SystemExit) as error:
-        main(["capture", "--repo", "/tmp"])
+        main([command])
     assert error.value.code != 0
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "2026-08-15 12:00:00Z",
-        "2026-08-15T12:00Z",
-        "20260815T120000Z",
-        "2026-08-15T12:00:00",
-        "2026-08-15T12:00:00+01:00",
-        "2026-08-15T12:00:00+0000",
-        " 2026-08-15T12:00:00Z",
-    ],
-)
-def test_captured_at_rejects_non_strict_rfc3339_utc(value: str) -> None:
-    from gel_registry.__main__ import _parse_captured_at
-
-    with pytest.raises(ArgumentTypeError):
-        _parse_captured_at(value)
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "2026-08-15T12:00:00Z",
-        "2026-08-15T12:00:00+00:00",
-        "2026-08-15T12:00:00.123456Z",
-    ],
-)
-def test_captured_at_accepts_strict_rfc3339_utc(value: str) -> None:
-    from gel_registry.__main__ import _parse_captured_at
-
-    parsed = _parse_captured_at(value)
-    assert parsed.tzinfo is UTC
-    assert parsed.utcoffset() == timedelta(0)
-
-
-def test_capture_and_live_verification_are_explicit_commands(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    from gel_registry import __main__ as cli
-
-    calls: list[str] = []
-
-    def capture(*_args: object, **_kwargs: object) -> object:
-        calls.append("capture")
-        raise AssertionError("capture was not explicitly requested")
-
-    def rehearsal(*_args: object, **_kwargs: object) -> ValidationReport:
-        calls.append("rehearsal")
-        return ValidationReport(checks=("remote.capture.rehearsal",))
-
-    monkeypatch.setattr(cli.capture, "capture_legacy", capture)
-    monkeypatch.setattr(cli.validate, "validate_capture_rehearsal", rehearsal)
-    monkeypatch.setattr(
-        cli.validate,
-        "validate_local",
-        lambda _repo, _base=None: ValidationReport(checks=("local",)),
-    )
-
-    assert cli.main(["validate", "--repo", str(tmp_path)]) == 0
-    assert calls == []
-    assert cli.main(["verify-capture-live", "--repo", str(tmp_path)]) == 0
-    assert calls == ["rehearsal"]
-    assert capsys.readouterr().err == ""
+    assert "invalid choice" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

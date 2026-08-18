@@ -28,7 +28,7 @@ failover must preserve that same static-only contract.
 3. In repository Settings, enable Actions only for the checked-in workflows and
    allow only GitHub/verified actions that the workflows pin to full commit
    SHAs. Keep the default `GITHUB_TOKEN` permission read-only.
-4. Create the branch protection rule below before accepting capture or
+4. Create the branch protection rule below before accepting registry-data or
    publication pull requests.
 
 ## Default-branch protection
@@ -39,8 +39,8 @@ Apply these settings to the default branch:
   dismissal of stale approvals, and resolution of all conversations.
 - Require branches to be up to date before merging and require the exact
   `Registry validation / local` status check from `.github/workflows/validate.yml`.
-  Remote rehearsal and release checks remain scoped to the changes that need
-  them, but the local check is required for every pull request.
+  Remote release checks remain scoped to the changes that need them, but the
+  local check is required for every pull request.
 - Restrict who may push to the default branch to the repository maintainers.
   Disable force pushes (**Allow force pushes: disabled**) and disable branch
   deletion (**Allow branch deletion: disabled**).
@@ -56,9 +56,9 @@ The required local check is reproducible from a clean checkout:
 uv run pytest -q && uv run mypy src tests && uv run ruff check . && uv run ruff format --check .
 ```
 
-The capture, bootstrap-publication, and promotion workflows may have
-job-scoped `contents: write` and `pull-requests: write` only where they create
-their review branch and pull request. Their workflow-level permissions remain
+The bootstrap-publication and promotion workflows may have job-scoped
+`contents: write` and `pull-requests: write` only where they create their
+review branch and pull request. Their workflow-level permissions remain
 read-only. No workflow uses `pull_request_target`, a personal access token, or
 force-push behavior. Review the Actions audit log after changing permissions.
 
@@ -127,28 +127,26 @@ record the owner and expiry/renewal path in the on-call handoff.
 
 ## Capture review
 
-Run the manually dispatched **Capture legacy bootstrap** workflow with one
-reviewed RFC3339 UTC `captured_at` value. The resulting branch and pull request
-must contain only the frozen capture evidence under
-`upstream/packages.geldata.com/legacy-2026-08-bootstrap/` and the normalized
-`bootstrap/` inputs. Review the ordered 24-entry manifest, status-dependent
-metadata, response digests, redirect provenance, and the absence of a pointer,
-release record, or `public/` change. Require the pre-publication capture check
-and the reproducible local validation before merging.
+The one-time legacy capture is prepared locally on the
+`publish/legacy-2026-08-bootstrap` branch. That pull request carries the capture
+tool together with the frozen evidence under
+`upstream/packages.geldata.com/legacy-2026-08-bootstrap/`, the normalized
+`bootstrap/` inputs, and the rendered publication. Review the ordered 24-entry
+manifest, status-dependent metadata, response digests, redirect provenance,
+and the exact derived output. Require reproducible local validation before
+merging.
 
-Routine validation and rendering are offline. A live capture rehearsal is an
-explicit, reviewable check for the capture/publication path; it is not a
-build-time fetch performed by Vercel.
+Routine validation and rendering are offline. Vercel never fetches the legacy
+indexes or runs the capture tool during deployment.
 
 ## Bootstrap publication and promotion
 
-After the capture pull request is merged, run **Publish legacy bootstrap**. In
-its pull request, inspect the calculated nonempty snapshot ID, every pinned
-`public/s/<snapshot-id>/` file, `pointers/latest.json`, and the regenerated
-`public/registry.json` plus `public/v1/snapshots.json`. Confirm that all pinned
-bytes are append-only and that the moving documents reference the selected
-snapshot. Merge only after `Registry validation / local` passes and the preview
-inspection succeeds.
+In the bootstrap publication pull request, inspect the calculated nonempty
+snapshot ID, every pinned `public/s/<snapshot-id>/` file,
+`pointers/latest.json`, and the generated `public/registry.json` plus
+`public/v1/snapshots.json`. Confirm that all pinned bytes are append-only and
+that the moving documents reference the selected snapshot. Merge only after
+`Registry validation / local` passes and the preview inspection succeeds.
 
 The scheduled or manually dispatched **Promote stable Gel CLI releases**
 workflow verifies new release records and opens a pull request. Review the

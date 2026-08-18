@@ -1,9 +1,9 @@
-"""Offline integrity gates and explicitly-scoped remote rehearsals.
+"""Offline integrity gates and explicitly-scoped remote release checks.
 
 The local validator is deliberately a consumer of committed bytes.  It does
 not create an HTTP client and it never asks Git or a remote host for history.
-The two remote entry points below are separate so workflows can opt into the
-network checks appropriate for a capture or release pull request.
+The remote release entry point is separate so workflows can opt into network
+checks only for release pull requests.
 """
 
 from __future__ import annotations
@@ -16,13 +16,12 @@ from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urlsplit
 
 import httpx
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
-from .capture import CaptureError, verify_live_capture
 from .constants import capture_urls
 from .digest import canonical_json, hash_bytes
 from .github import GITHUB_REPOSITORY, GitHubAsset, GitHubRelease, download_assets
@@ -54,13 +53,6 @@ _SCHEMA_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("root.json", RootManifest),
     ("snapshot-listing.json", SnapshotListing),
 )
-_REMOTE_TIMEOUT = httpx.Timeout(
-    connect=10.0,
-    read=60.0,
-    write=60.0,
-    pool=60.0,
-)
-_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 
 
 @dataclass(frozen=True, slots=True)
@@ -1044,132 +1036,8 @@ def validate_release_remotes(
     return collector.report()
 
 
-def _validate_rehearsal_url(url: str) -> None:
-    parsed = urlsplit(url)
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != "packages.geldata.com"
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.fragment
-        or parsed.port not in (None, 443)
-    ):
-        raise ValueError(
-            f"installref URL is not an absolute packages.geldata.com HTTPS URL: {url}"
-        )
-
-
-def _download_rehearsal_ref(client: httpx.Client, url: str) -> bytes:
-    current = url
-    for _ in range(11):
-        _validate_rehearsal_url(current)
-        try:
-            response = client.get(
-                current,
-                follow_redirects=False,
-                timeout=_REMOTE_TIMEOUT,
-            )
-        except httpx.HTTPError as exc:
-            raise CaptureError(f"installref request failed: {exc}") from exc
-        if response.status_code in _REDIRECT_STATUSES:
-            location = response.headers.get("location")
-            if not location:
-                raise CaptureError("installref redirect has no Location")
-            current = urljoin(current, location)
-            continue
-        if response.status_code != 200:
-            raise CaptureError(f"installref returned HTTP {response.status_code}")
-        return response.content
-    raise CaptureError("installref redirect limit exceeded")
-
-
-def _check_rehearsal_artifact(
-    client: httpx.Client,
-    ref_url: str,
-    size: int,
-    blake2b: str,
-    sha256: str | None,
-) -> None:
-    _validate_rehearsal_url(ref_url)
-    body = _download_rehearsal_ref(client, ref_url)
-    observed = hash_bytes(body)
-    if observed.size != size or observed.blake2b != blake2b:
-        raise CaptureError(
-            "installref verification mismatch "
-            f"(expected size={size} blake2b={blake2b}; "
-            f"observed size={observed.size} blake2b={observed.blake2b})"
-        )
-    if sha256 is not None and observed.sha256 != sha256:
-        raise CaptureError(
-            "installref SHA-256 mismatch "
-            f"(expected {sha256}; observed {observed.sha256})"
-        )
-
-
-def validate_capture_rehearsal(repo: Path, client: httpx.Client) -> ValidationReport:
-    """Refetch the complete capture and one artifact per nonempty index."""
-
-    repository = Path(repo)
-    collector = _Collector()
-    check = "remote.capture.rehearsal"
-    collector.begin(check)
-    root = _capture_root(repository)
-    path = root / "capture.json"
-    try:
-        raw = _read_file(path)
-        manifest = CaptureManifest.model_validate_json(raw)
-    except (OSError, PydanticValidationError, ValueError) as exc:
-        collector.add(check, _display_path(repository, path), str(exc))
-        return collector.report()
-
-    try:
-        verify_live_capture(client, root, manifest)
-    except Exception as exc:
-        collector.add(check, _display_path(repository, path), str(exc))
-
-    bootstrap = repository / "bootstrap"
-    for entry in manifest.entries:
-        if entry.status != 200:
-            continue
-        index_path = bootstrap / f"{entry.channel}-{entry.platform}.json"
-        try:
-            index = PackageIndex.model_validate_json(_read_file(index_path))
-        except (OSError, PydanticValidationError, ValueError) as exc:
-            collector.add(check, _display_path(repository, index_path), str(exc))
-            continue
-        references = tuple(
-            reference for package in index.packages for reference in package.installrefs
-        )
-        if not references:
-            if index.packages:
-                collector.add(
-                    check,
-                    _display_path(repository, index_path),
-                    "nonempty index has no installref",
-                )
-            continue
-        reference = references[0]
-        try:
-            verification = reference.verification
-            _check_rehearsal_artifact(
-                client,
-                reference.ref,
-                verification.size,
-                verification.blake2b,
-                verification.sha256,
-            )
-        except Exception as exc:
-            collector.add(
-                check,
-                _display_path(repository, index_path),
-                f"{entry.channel}/{entry.platform}: {exc}",
-            )
-    return collector.report()
-
-
 __all__ = [
     "ValidationReport",
-    "validate_capture_rehearsal",
     "validate_capture_local",
     "validate_local",
     "validate_release_remotes",

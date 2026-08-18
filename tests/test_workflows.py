@@ -13,7 +13,6 @@ import pytest
 
 WORKFLOW_ROOT = Path(__file__).parents[1] / ".github" / "workflows"
 WORKFLOW_NAMES = {
-    "capture.yml",
     "publish-bootstrap.yml",
     "promote.yml",
     "validate.yml",
@@ -117,7 +116,7 @@ def test_every_third_party_action_is_pinned_to_a_full_sha(
 def test_workflows_have_explicit_least_privilege_permissions(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
-    writer_workflows = {"capture.yml", "publish-bootstrap.yml", "promote.yml"}
+    writer_workflows = {"publish-bootstrap.yml", "promote.yml"}
     for name, workflow in workflows.items():
         permissions = workflow.get("permissions")
         assert isinstance(permissions, dict), f"{name}: missing workflow permissions"
@@ -164,14 +163,13 @@ def test_workflows_use_locked_dependencies_and_forbid_unsafe_dispatches(
     local_text = json.dumps(local)
     assert "packages.geldata.com" not in local_text
     assert "verify-capture-live" not in local_text
-    assert "validate-capture" in local_text
     assert "normalize --repo . --check" in local_text
 
 
 def test_pr_producers_have_only_job_scoped_write_permissions(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
-    for name in ("capture.yml", "publish-bootstrap.yml", "promote.yml"):
+    for name in ("publish-bootstrap.yml", "promote.yml"):
         workflow = workflows[name]
         top_level = json.dumps(workflow["permissions"])
         assert '"write"' not in top_level
@@ -181,7 +179,6 @@ def test_pr_producers_have_only_job_scoped_write_permissions(
 def test_triggers_match_their_operational_scope(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
-    assert set(workflows["capture.yml"]["on"]) == {"workflow_dispatch"}
     assert set(workflows["publish-bootstrap.yml"]["on"]) == {"workflow_dispatch"}
     assert set(workflows["promote.yml"]["on"]) == {
         "schedule",
@@ -190,25 +187,15 @@ def test_triggers_match_their_operational_scope(
     assert "pull_request" in workflows["validate.yml"]["on"]
 
 
-def test_validation_scopes_live_rehearsal_to_capture_and_publication_changes(
+def test_validation_scopes_remote_checks_to_release_changes(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
     scope = workflows["validate.yml"]["jobs"]["scope"]
     assert isinstance(scope, dict)
     outputs = scope.get("outputs")
     assert isinstance(outputs, dict)
-    assert "capture" in outputs
-    scope_text = "\n".join(
-        str(step.get("run", "")) for step in scope["steps"] if isinstance(step, dict)
-    )
-    assert "capture_paths" in scope_text
-    assert "capture_only" in scope_text
-    assert '"$HEAD_REF" == "capture/legacy-2026-08-bootstrap"' in scope_text
-    assert '"$HEAD_REF" == "publish/legacy-2026-08-bootstrap"' in scope_text
-    assert '"$release" == false' in scope_text
-    rehearsal = workflows["validate.yml"]["jobs"]["capture-rehearsal"]
-    assert isinstance(rehearsal, dict)
-    assert "needs.scope.outputs.rehearsal" in str(rehearsal.get("if"))
+    assert set(outputs) == {"registry_data", "release"}
+    assert "capture-rehearsal" not in workflows["validate.yml"]["jobs"]
 
 
 def test_validation_skips_registry_checks_only_without_registry_data(
@@ -267,7 +254,6 @@ def test_retained_writer_branches_reject_unrelated_committed_paths(
     workflows: dict[str, dict[str, Any]],
 ) -> None:
     expected = {
-        "capture.yml": r"!~ /^(upstream|bootstrap)\//",
         "publish-bootstrap.yml": r"!~ /^(pointers|public)\//",
         "promote.yml": r"!~ /^(releases\/gel-cli|pointers|public)\//",
     }

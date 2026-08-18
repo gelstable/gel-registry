@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import copy
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
 
 import httpx
 import pytest
@@ -26,7 +24,6 @@ from gel_registry.schema import (
 from gel_registry.validate import (
     ValidationReport,
     validate_capture_local,
-    validate_capture_rehearsal,
     validate_local,
 )
 
@@ -303,74 +300,3 @@ def test_scoped_release_remote_checks_only_supplied_records(
     assert report.ok, report.errors
     assert downloads == ["v1.2.3"]
     assert verifications == ["v1.2.3"]
-
-
-def test_capture_rehearsal_uses_the_explicit_live_capture_function(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    manifest = CaptureManifest(
-        capture="legacy-2026-08-bootstrap",
-        origin="https://packages.geldata.com",
-        captured_at=CAPTURED_AT,
-        entries=tuple(
-            CaptureEntry(
-                channel=channel,
-                platform=platform,
-                url=url,
-                status=404,
-            )
-            for channel, platform, url in capture_urls()
-        ),
-    )
-    capture_root = (
-        tmp_path / "upstream" / "packages.geldata.com" / "legacy-2026-08-bootstrap"
-    )
-    (capture_root).mkdir(parents=True)
-    (capture_root / "capture.json").write_bytes(canonical_json(manifest))
-    observed: list[Path] = []
-
-    def fake_verify(_client: httpx.Client, root: Path, value: CaptureManifest) -> None:
-        observed.append(root)
-        assert value == manifest
-
-    monkeypatch.setattr(validate_module, "verify_live_capture", fake_verify)
-
-    report = validate_capture_rehearsal(tmp_path, cast(httpx.Client, object()))
-
-    assert report.ok
-    assert observed == [capture_root]
-
-
-def test_capture_rehearsal_checks_one_installref_per_nonempty_index(
-    tmp_path: Path,
-    package_index_data: dict[str, object],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    data = copy.deepcopy(package_index_data)
-    packages = data["packages"]
-    assert isinstance(packages, list)
-    package = packages[0]
-    assert isinstance(package, dict)
-    installref = package["installrefs"]
-    assert isinstance(installref, list)
-    verification = installref[0]["verification"]
-    assert isinstance(verification, dict)
-    verification["size"] = 3
-    verification["sha256"] = None
-    verification["blake2b"] = hash_bytes(b"abc").blake2b
-    _complete_repository(tmp_path, data)
-    monkeypatch.setattr(validate_module, "verify_live_capture", lambda *_args: None)
-
-    class Client:
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def get(self, *_args: object, **_kwargs: object) -> httpx.Response:
-            self.calls += 1
-            return httpx.Response(200, content=b"abc")
-
-    client = Client()
-    report = validate_capture_rehearsal(tmp_path, cast(httpx.Client, client))
-
-    assert report.ok, report.errors
-    assert client.calls == 24
