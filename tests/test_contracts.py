@@ -12,7 +12,7 @@ from gel_registry.constants import (
     ORIGIN,
     capture_urls,
 )
-from gel_registry.schema import (
+from gel_registry.contracts import (
     Artifact,
     CaptureEntry,
     CaptureManifest,

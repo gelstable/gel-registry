@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from gel_registry.contracts import PackageIndex
 from gel_registry.digest import canonical_json
-from gel_registry.schema import PackageIndex
-from gel_registry.validate import ValidationReport
+from gel_registry.validation import ValidationReport
 
 
 def _write_bootstrap(repo: Path, package_index_data: dict[str, object]) -> None:
@@ -56,7 +56,7 @@ def test_validation_errors_are_nonzero_and_path_qualified(
     from gel_registry import __main__ as cli
 
     monkeypatch.setattr(
-        cli.validate,
+        cli.validation,
         "validate_local",
         lambda _repo, _base=None: ValidationReport(
             errors=("pointer.integrity: pointers/latest.json: invalid snapshot",),

@@ -12,9 +12,14 @@ from urllib.parse import urlsplit
 import zstandard as zstd
 
 from .constants import CLI_PLATFORMS
+from .contracts import (
+    Artifact,
+    ReleaseRecord,
+    ReleaseSource,
+    media_type_for_platform,
+)
 from .digest import Digests, hash_file
 from .github import GITHUB_REPOSITORY, GitHubAsset, GitHubRelease, canonical_asset_names
-from .schema import Artifact, ReleaseRecord, ReleaseSource, _media_type_for_platform
 
 _STREAM_CHUNK_SIZE = 1024 * 1024
 
@@ -126,7 +131,7 @@ def _artifact(
     return Artifact(
         platform=platform,
         encoding=encoding,
-        media_type=_media_type_for_platform(platform),
+        media_type=media_type_for_platform(platform),
         url=url,
         size=digests.size,
         sha256=digests.sha256,

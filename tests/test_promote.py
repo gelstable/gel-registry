@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from gel_registry.contracts import PackageIndex, ReleaseRecord
 from gel_registry.digest import canonical_json
 from gel_registry.promote import PromotionError, promote_release, publish_bootstrap
 from gel_registry.render import ContestedIdentityError
-from gel_registry.schema import PackageIndex, ReleaseRecord
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

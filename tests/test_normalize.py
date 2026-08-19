@@ -8,13 +8,13 @@ from urllib.parse import urljoin
 import pytest
 
 from gel_registry.constants import CAPTURE_ID, ORIGIN, capture_urls
+from gel_registry.contracts import CaptureEntry, CaptureManifest, PackageIndex
 from gel_registry.digest import canonical_json, hash_bytes
 from gel_registry.normalize import (
     NormalizationError,
     normalize_capture,
     validate_normalization,
 )
-from gel_registry.schema import CaptureEntry, CaptureManifest, PackageIndex
 
 CAPTURED_AT = datetime(2026, 8, 15, 12, 34, 56, tzinfo=UTC)
 FIXTURE = Path(__file__).parent / "fixtures" / "upstream" / "relative-index.json"

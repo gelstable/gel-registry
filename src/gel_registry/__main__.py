@@ -12,9 +12,9 @@ from typing import cast
 import httpx
 from pydantic import ValidationError
 
-from . import github, normalize, promote, render, validate, verify
+from . import github, normalize, promote, render, validation, verify
 from .constants import CAPTURE_ID
-from .schema import ReleaseRecord
+from .contracts import ReleaseRecord
 
 type Handler = Callable[[argparse.Namespace], int]
 
@@ -39,7 +39,7 @@ def _error_text(error: BaseException) -> str:
     return message.splitlines()[0]
 
 
-def _print_report(report: validate.ValidationReport) -> int:
+def _print_report(report: validation.ValidationReport) -> int:
     if report.ok:
         print("ok")
         return 0
@@ -148,10 +148,10 @@ def _run_promote(args: argparse.Namespace) -> int:
 
 def _run_validate(args: argparse.Namespace) -> int:
     repo = Path(args.repo)
-    report = validate.validate_local(repo, args.base)
+    report = validation.validate_local(repo, args.base)
     if args.remote_release:
-        remote = validate.validate_release_remotes(repo, args.remote_release)
-        report = validate.ValidationReport(
+        remote = validation.validate_release_remotes(repo, args.remote_release)
+        report = validation.ValidationReport(
             errors=report.errors + remote.errors,
             checks=report.checks
             + tuple(check for check in remote.checks if check not in report.checks),
@@ -160,7 +160,7 @@ def _run_validate(args: argparse.Namespace) -> int:
 
 
 def _run_validate_capture(args: argparse.Namespace) -> int:
-    report = validate.validate_capture_local(Path(args.repo), args.base)
+    report = validation.validate_capture_local(Path(args.repo), args.base)
     return _print_report(report)
 
 
@@ -273,6 +273,6 @@ __all__ = [
     "normalize",
     "promote",
     "render",
-    "validate",
+    "validation",
     "verify",
 ]

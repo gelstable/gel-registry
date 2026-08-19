@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import ctypes
-import errno
-import os
 import shutil
-import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
@@ -14,65 +10,15 @@ from urllib.parse import urljoin, urlsplit
 from pydantic import ValidationError
 
 from .constants import CAPTURE_ID, ORIGIN
+from .contracts import CaptureManifest, PackageIndex
 from .digest import canonical_json, hash_bytes
-from .schema import CaptureManifest, PackageIndex
+from .storage import rename_noreplace
 
-_RENAME_EXCL = 0x00000004
-_RENAME_NOREPLACE = 0x00000001
-_AT_FDCWD = -100
 _PACKAGE_HOST = "packages.geldata.com"
 
 
 class NormalizationError(RuntimeError):
     """Raised when a frozen capture cannot be normalized safely."""
-
-
-def _encoded_path(path: Path) -> bytes:
-    encoded = os.fsencode(str(path))
-    if b"\x00" in encoded:
-        raise ValueError("normalization path contains an embedded NUL byte")
-    return encoded
-
-
-def _rename_noreplace(source: Path, destination: Path) -> None:
-    """Atomically rename a directory without replacing a destination."""
-
-    source_bytes = _encoded_path(source)
-    destination_bytes = _encoded_path(destination)
-    libc = ctypes.CDLL(None, use_errno=True)
-    if sys.platform == "darwin":
-        try:
-            renamex_np = libc.renamex_np
-        except AttributeError as exc:
-            raise OSError(errno.ENOTSUP, "renamex_np is unavailable") from exc
-        renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
-        renamex_np.restype = ctypes.c_int
-        result = renamex_np(source_bytes, destination_bytes, _RENAME_EXCL)
-    elif sys.platform.startswith("linux"):
-        try:
-            renameat2 = libc.renameat2
-        except AttributeError as exc:
-            raise OSError(errno.ENOTSUP, "renameat2 is unavailable") from exc
-        renameat2.argtypes = [
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_uint,
-        ]
-        renameat2.restype = ctypes.c_int
-        result = renameat2(
-            _AT_FDCWD,
-            source_bytes,
-            _AT_FDCWD,
-            destination_bytes,
-            _RENAME_NOREPLACE,
-        )
-    else:
-        raise OSError(errno.ENOTSUP, "atomic no-replace rename is unavailable")
-    if result != 0:
-        error = ctypes.get_errno()
-        raise OSError(error, os.strerror(error), str(destination))
 
 
 def _load_manifest(capture_root: Path) -> CaptureManifest:
@@ -325,7 +271,7 @@ def normalize_capture(capture_root: Path, output_root: Path) -> tuple[Path, ...]
                 raise drift
         else:
             try:
-                _rename_noreplace(stage, output_root)
+                rename_noreplace(stage, output_root)
             except OSError as exc:
                 raise NormalizationError(
                     f"could not atomically install normalized bootstrap: {exc}"
