@@ -1,24 +1,30 @@
 """Builders shared by more than one test module.
 
-Repository and package-index fixtures live here so the tests for one lifecycle
-phase can be read without the builders of another.
+Repository, package-index and GitHub payload fixtures live here so the tests
+for one lifecycle phase can be read without the builders of another.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from gel_registry.constants import capture_urls
+import httpx
+
+from gel_registry.constants import CLI_PLATFORMS, capture_urls
 from gel_registry.contracts import (
+    Artifact,
     CaptureEntry,
     CaptureManifest,
     PackageIndex,
     Pointer,
     ReleaseRecord,
+    ReleaseSource,
 )
 from gel_registry.digest import canonical_json, hash_bytes
+from gel_registry.github import GITHUB_REPOSITORY, asset_name
 from gel_registry.normalize import normalize_capture
 from gel_registry.render import build_snapshot, render_schemas, select_snapshot
 
@@ -145,3 +151,127 @@ def complete_repository(root: Path, package_index_data: dict[str, object]) -> No
     write_pointer(root, snapshot)
     select_snapshot(root)
     render_schemas(root)
+
+
+def release_record(version: str = "1.2.3") -> ReleaseRecord:
+    artifacts: list[Artifact] = []
+    for platform in CLI_PLATFORMS:
+        for encoding in ("identity", "zstd"):
+            name = asset_name(platform, encoding)
+            artifacts.append(
+                Artifact(
+                    platform=platform,
+                    encoding=encoding,
+                    media_type=(
+                        "application/x-dosexec"
+                        if platform.endswith("-windows-msvc")
+                        else "application/x-mach-binary"
+                        if platform.endswith("-apple-darwin")
+                        else "application/x-pie-executable"
+                    ),
+                    url=(
+                        "https://github.com/gelstable/gel-cli/releases/download/"
+                        f"v{version}/{name}"
+                    ),
+                    size=3,
+                    sha256="a" * 64,
+                    blake2b="b" * 128,
+                )
+            )
+    return ReleaseRecord(
+        product="gel-cli",
+        channel="stable",
+        version=version,
+        source=ReleaseSource(
+            repository="gelstable/gel-cli",
+            release_tag=f"v{version}",
+            release_id=123,
+        ),
+        promoted_at=CAPTURED_AT,
+        artifacts=tuple(artifacts),
+    )
+
+
+def github_asset(name: str, release_id: int = 1) -> dict[str, object]:
+    return {
+        "id": release_id,
+        "name": name,
+        "url": f"https://api.github.com/repos/{GITHUB_REPOSITORY}/assets/{release_id}",
+        "browser_download_url": (
+            f"https://github.com/{GITHUB_REPOSITORY}/releases/download/v1.2.3/{name}"
+        ),
+    }
+
+
+def github_release(
+    tag: str = "v1.2.3",
+    release_id: int = 100,
+    *,
+    draft: bool = False,
+    prerelease: bool = False,
+    owner: str = GITHUB_REPOSITORY,
+) -> dict[str, object]:
+    assets = [
+        github_asset(asset_name(platform, "identity"), index)
+        for index, platform in enumerate(CLI_PLATFORMS, 1)
+    ]
+    assets.extend(
+        {
+            **asset,
+            "id": index + 10,
+            "url": (
+                f"https://api.github.com/repos/{GITHUB_REPOSITORY}/assets/{index + 10}"
+            ),
+            "name": f"{asset['name']}.zst",
+        }
+        for index, asset in enumerate(assets[:], 1)
+    )
+    return {
+        "id": release_id,
+        "tag_name": tag,
+        "draft": draft,
+        "prerelease": prerelease,
+        "url": f"https://api.github.com/repos/{owner}/releases/{release_id}",
+        "html_url": f"https://github.com/{owner}/releases/tag/{tag}",
+        "assets": assets,
+    }
+
+
+def mock_client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.Client:
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def product_policy(
+    product: str = "gel-cli",
+    *,
+    repository: str = "gelstable/gel-cli",
+    adapter: str = "gel-cli",
+) -> dict[str, object]:
+    return {
+        "adapter": adapter,
+        "channel": "stable",
+        "encodings": ["identity", "zstd"],
+        "platforms": list(CLI_PLATFORMS),
+        "product": product,
+        "repository": repository,
+        "tag_pattern": r"^v[0-9]+\.[0-9]+\.[0-9]+$",
+    }
+
+
+def write_source_policy(
+    repo: Path,
+    products: list[dict[str, object]] | None = None,
+    *,
+    canonical: bool = True,
+) -> Path:
+    """Write the registry-owned source policy the producer reads."""
+
+    path = repo / "sources" / "products.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    value = {"products": products or [product_policy()], "schema_version": 1}
+    path.write_bytes(
+        canonical_json(value)
+        if canonical
+        else (json.dumps(dict(reversed(value.items())), indent=2) + "\n").encode()
+    )
+    return path
