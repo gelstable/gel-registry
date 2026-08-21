@@ -13,8 +13,10 @@ from typing import cast
 import httpx
 
 from . import capture, normalize, publication, render, validation
+from .candidate import build_candidate
 from .constants import CAPTURE_ID
 from .contracts import CaptureManifest
+from .promote import promote_candidate
 
 type Handler = Callable[[argparse.Namespace], int]
 
@@ -115,6 +117,17 @@ def _run_publish_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_build_candidate(args: argparse.Namespace) -> int:
+    """Discover one complete candidate before entering the write transaction."""
+
+    repo = Path(args.repo)
+    with httpx.Client() as client:
+        candidate = build_candidate(repo, client)
+    result = promote_candidate(repo, candidate.records, candidate.blocked)
+    print(result.snapshot)
+    return 0
+
+
 def _print_report(report: validation.ValidationReport) -> int:
     if report.ok:
         print("ok")
@@ -178,6 +191,12 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_repo(publish_parser)
     publish_parser.set_defaults(handler=_run_publish_bootstrap)
 
+    candidate_parser = commands.add_parser(
+        "build-candidate", help="discover, verify, and promote one full candidate"
+    )
+    _add_repo(candidate_parser)
+    candidate_parser.set_defaults(handler=_run_build_candidate)
+
     validate_parser = commands.add_parser(
         "validate", help="run deterministic local validation"
     )
@@ -211,11 +230,13 @@ if __name__ == "__main__":  # pragma: no cover - exercised by the console script
 
 
 __all__ = [
+    "build_candidate",
     "capture",
     "httpx",
     "main",
     "normalize",
     "publication",
+    "promote_candidate",
     "render",
     "validation",
 ]

@@ -98,10 +98,12 @@ def publish_bootstrap(repo: Path) -> PublicationResult:
         shutil.rmtree(stage, ignore_errors=True)
 
 
-def _validate_repository(repo: Path) -> None:
+def _validate_repository(
+    repo: Path, *, source_roots: tuple[str, ...] = _SOURCE_ROOTS
+) -> None:
     if repo.is_symlink() or not repo.is_dir():
         raise PublicationError(f"repository is not a directory: {repo}")
-    for name in _SOURCE_ROOTS:
+    for name in source_roots:
         source = repo / name
         if source.exists() or source.is_symlink():
             _tree_entries(source, name)
@@ -175,17 +177,22 @@ def _copy_tree(source: Path, destination: Path, label: str) -> None:
         raise PublicationError(f"could not stage {label}: {exc}") from exc
 
 
-def _stage_repository(repo: Path) -> Path:
+def _stage_repository(
+    repo: Path,
+    *,
+    source_roots: tuple[str, ...] = _SOURCE_ROOTS,
+    prefix: str = "publication",
+) -> Path:
     try:
         stage = Path(
-            tempfile.mkdtemp(prefix=f".{repo.name}.publication-", dir=str(repo.parent))
+            tempfile.mkdtemp(prefix=f".{repo.name}.{prefix}-", dir=str(repo.parent))
         )
     except OSError as exc:
         raise PublicationError(
-            f"could not create publication staging tree: {exc}"
+            f"could not create {prefix} staging tree: {exc}"
         ) from exc
     try:
-        for name in _SOURCE_ROOTS:
+        for name in source_roots:
             source = repo / name
             if source.exists() or source.is_symlink():
                 _copy_tree(source, stage / name, name)
@@ -206,16 +213,26 @@ def _write_pointer(stage: Path, snapshot: str) -> None:
         raise PublicationError(f"could not stage latest pointer {path}: {exc}") from exc
 
 
-def _is_mutable(relative: str) -> bool:
-    return relative in _MUTABLE_PATHS
+def _is_mutable(relative: str, mutable_paths: frozenset[str] = _MUTABLE_PATHS) -> bool:
+    return relative in mutable_paths
 
 
 def _is_migrated_support(relative: str) -> bool:
     return relative == _MIGRATED_SUPPORT_PATH
 
 
-def _allowed_addition(relative: str, snapshot: str) -> bool:
-    if relative in _MUTABLE_PATHS or relative in _SUPPORT_PATHS:
+def _allowed_addition(
+    relative: str,
+    snapshot: str,
+    *,
+    additional_paths: frozenset[str] = frozenset(),
+    mutable_paths: frozenset[str] = _MUTABLE_PATHS,
+) -> bool:
+    if (
+        relative in mutable_paths
+        or relative in _SUPPORT_PATHS
+        or relative in additional_paths
+    ):
         return True
     parts = Path(relative).parts
     # A blob in the shared content-addressed store. Matched by exact shape
@@ -243,6 +260,9 @@ def _compare_family(
     *,
     snapshot: str,
     changed: set[str],
+    additional_paths: frozenset[str] = frozenset(),
+    removable_paths: frozenset[str] = frozenset(),
+    mutable_paths: frozenset[str] = _MUTABLE_PATHS,
 ) -> None:
     existing = _tree_entries(repo / name, name)
     candidate = _tree_entries(stage / name, f"staged {name}")
@@ -251,17 +271,25 @@ def _compare_family(
         left = existing.get(relative)
         right = candidate.get(relative)
         if relative not in candidate:
+            if full in removable_paths:
+                changed.add(full)
+                continue
             raise PublicationError(f"publication removed immutable path: {full}")
         if relative not in existing:
             if right is None:
                 continue
-            if not _allowed_addition(full, snapshot):
+            if not _allowed_addition(
+                full,
+                snapshot,
+                additional_paths=additional_paths,
+                mutable_paths=mutable_paths,
+            ):
                 raise PublicationError(f"publication added unexpected path: {full}")
             changed.add(full)
             continue
         if left == right:
             continue
-        if _is_mutable(full):
+        if _is_mutable(full, mutable_paths):
             if right is None:
                 raise PublicationError(f"mutable path became a directory: {full}")
             changed.add(full)
@@ -295,12 +323,30 @@ def _compare_root_file(
         changed.add(relative)
 
 
-def _compare_transaction(repo: Path, stage: Path, *, snapshot: str) -> tuple[str, ...]:
+def _compare_transaction(
+    repo: Path,
+    stage: Path,
+    *,
+    snapshot: str,
+    source_roots: tuple[str, ...] = _SOURCE_ROOTS,
+    additional_paths: frozenset[str] = frozenset(),
+    removable_paths: frozenset[str] = frozenset(),
+    mutable_paths: frozenset[str] = _MUTABLE_PATHS,
+) -> tuple[str, ...]:
     changed: set[str] = set()
     for relative in _ROOT_FILES:
         _compare_root_file(repo, stage, relative, changed=changed)
-    for name in _SOURCE_ROOTS:
-        _compare_family(repo, stage, name, snapshot=snapshot, changed=changed)
+    for name in source_roots:
+        _compare_family(
+            repo,
+            stage,
+            name,
+            snapshot=snapshot,
+            changed=changed,
+            additional_paths=additional_paths,
+            removable_paths=removable_paths,
+            mutable_paths=mutable_paths,
+        )
     return tuple(sorted(changed))
 
 
@@ -407,6 +453,17 @@ def _restore_file(
     _replace_file(repo, path, previous, label, created_dirs)
 
 
+def _remove_file(path: Path, label: str) -> None:
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise PublicationError(f"{label} is not a regular file: {path}")
+    if not path.exists():
+        return
+    try:
+        path.unlink()
+    except OSError as exc:
+        raise PublicationError(f"could not remove {label}: {exc}") from exc
+
+
 def _rollback_created(
     created_files: list[tuple[Path, bytes]], created_dirs: list[Path]
 ) -> None:
@@ -428,15 +485,25 @@ def _rollback_created(
             continue
 
 
-def _install_transaction(repo: Path, stage: Path, changed_paths: Iterable[str]) -> None:
+def _install_transaction(
+    repo: Path,
+    stage: Path,
+    changed_paths: Iterable[str],
+    *,
+    mutable_paths: frozenset[str] = _MUTABLE_PATHS,
+    mutable_order: tuple[str, ...] = _MOVING_PATHS,
+    migrated_support_paths: frozenset[str] = frozenset({_MIGRATED_SUPPORT_PATH}),
+) -> None:
     changed = tuple(sorted(changed_paths))
     immutable = tuple(
         path
         for path in changed
-        if not _is_mutable(path) and not _is_migrated_support(path)
+        if path not in mutable_paths and path not in migrated_support_paths
     )
-    migrated = tuple(path for path in changed if _is_migrated_support(path))
-    mutable = tuple(path for path in _MOVING_PATHS if path in changed)
+    migrated = tuple(path for path in changed if path in migrated_support_paths)
+    changed_mutable = set(changed) & mutable_paths
+    mutable = tuple(path for path in mutable_order if path in changed_mutable)
+    mutable += tuple(sorted(changed_mutable - set(mutable)))
     transactional = (*migrated, *mutable)
     for relative in transactional:
         _preflight_file(repo, repo / relative, relative)
@@ -474,13 +541,16 @@ def _install_transaction(repo: Path, stage: Path, changed_paths: Iterable[str]) 
 
         for relative in mutable:
             source = stage / relative
-            try:
-                data = source.read_bytes()
-            except OSError as exc:
-                raise PublicationError(
-                    f"could not read staged mutable path {relative}: {exc}"
-                ) from exc
-            _replace_file(repo, repo / relative, data, relative, created_dirs)
+            if source.exists() or source.is_symlink():
+                try:
+                    data = source.read_bytes()
+                except OSError as exc:
+                    raise PublicationError(
+                        f"could not read staged mutable path {relative}: {exc}"
+                    ) from exc
+                _replace_file(repo, repo / relative, data, relative, created_dirs)
+            else:
+                _remove_file(repo / relative, relative)
     except (OSError, PublicationError) as exc:
         try:
             for relative in reversed(mutable):
