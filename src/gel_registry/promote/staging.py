@@ -16,6 +16,7 @@ from ..contracts import (
     ReleaseRecord,
 )
 from ..digest import canonical_json
+from ..render import RenderError, load_pinned_snapshot
 from .result import PromotionError
 
 _SOURCE_ROOTS = (*publication._SOURCE_ROOTS, "promotion")
@@ -166,18 +167,13 @@ def _ensure_nonempty_snapshot(
     bootstrap_indexes: tuple[Path, ...],
     require_bootstrap_packages: bool,
 ) -> None:
-    index_root = stage / "public" / "s" / snapshot / "index"
-    if not index_root.exists() or index_root.is_symlink() or not index_root.is_dir():
-        raise PromotionError(f"snapshot is empty: {snapshot}")
+    # The pinned snapshot is a root manifest referencing blobs in the shared
+    # store, so emptiness is a property of the manifest, not of a directory.
     try:
-        indexes = tuple(
-            path
-            for path in sorted(index_root.glob("*.json"), key=lambda item: item.name)
-            if path.is_file() and not path.is_symlink()
-        )
-    except OSError as exc:
+        _, index_bytes = load_pinned_snapshot(stage, snapshot)
+    except (RenderError, OSError, ValueError) as exc:
         raise PromotionError(f"could not inspect snapshot {snapshot}: {exc}") from exc
-    if not indexes:
+    if not index_bytes:
         raise PromotionError(f"snapshot is empty: {snapshot}")
     if not require_bootstrap_packages:
         return

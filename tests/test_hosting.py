@@ -155,7 +155,7 @@ def test_tracked_hosting_files_name_only_the_production_hostname() -> None:
 
 @pytest.mark.parametrize(
     "root",
-    ["upstream", "bootstrap", "releases", "pointers", "public"],
+    ["upstream", "bootstrap", "releases", "promotion", "pointers", "public", "sources"],
 )
 def test_the_data_detector_reports_every_registry_root(
     tmp_path: Path, root: str

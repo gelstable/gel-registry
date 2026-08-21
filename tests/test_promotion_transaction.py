@@ -32,7 +32,7 @@ from gel_registry.promote import promote_candidate
 from gel_registry.promote.result import PromotionError
 from gel_registry.promote.staging import _prepare_release
 from gel_registry.publication import publish_bootstrap
-from gel_registry.render import ContestedIdentityError
+from gel_registry.render import ContestedIdentityError, load_pinned_snapshot
 
 BOOTSTRAP_SNAPSHOT = "0f776b71381237c8"
 
@@ -107,8 +107,9 @@ def test_promotion_installs_records_blocked_state_and_the_pointer_together(
     # The new versions are composed into the snapshot; the previous snapshot is
     # still exactly the bytes it was installed with.
     versions: set[str] = set()
-    for path in (tmp_path / "public" / "s" / result.snapshot / "index").glob("*.json"):
-        index = PackageIndex.model_validate_json(path.read_bytes())
+    _, index_bytes = load_pinned_snapshot(tmp_path, result.snapshot)
+    for data in index_bytes.values():
+        index = PackageIndex.model_validate_json(data)
         versions.update(
             entry.version for entry in index.packages if entry.name == "gel-cli"
         )
@@ -129,13 +130,9 @@ def test_promotion_installs_records_blocked_state_and_the_pointer_together(
     assert cli.main(["build-candidate", "--repo", str(tmp_path)]) == 0
 
     snapshot = json.loads((tmp_path / "pointers/latest.json").read_bytes())["snapshot"]
+    _, index_bytes = load_pinned_snapshot(tmp_path, snapshot)
     index = PackageIndex.model_validate_json(
-        (
-            tmp_path
-            / "public/s"
-            / snapshot
-            / "index/stable-x86_64-unknown-linux-musl.json"
-        ).read_bytes()
+        index_bytes["stable-x86_64-unknown-linux-musl.json"]
     )
     assert sorted(entry.version for entry in index.packages) == [
         "1.0.0",

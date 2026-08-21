@@ -6,6 +6,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from ..contracts import Pointer
+from ..digest import canonical_json
 from ..render import RenderError, build_snapshot, render_schemas, select_snapshot
 from .report import Collector
 from .support import CAPTURE_REL, display_path, read_file, tree_files
@@ -63,6 +65,51 @@ def check_render_drift(repo: Path, collector: Collector) -> None:
                 repo, stage / "public", repo / "public", check, collector
             )
     except (OSError, ValueError) as exc:
+        collector.add(check, display_path(repo, repo), str(exc))
+
+
+def check_candidate_reproduction(
+    repo: Path,
+    collector: Collector,
+    *,
+    base: Path | None = None,
+) -> None:
+    """Rebuild generated candidate output from committed immutable inputs."""
+
+    check = "candidate.reproduction"
+    collector.begin(check)
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix=".gel-registry-candidate-"
+        ) as directory:
+            stage = Path(directory) / "repo"
+            pinned_source = None if base is None else Path(base) / "public"
+            _copy_render_inputs(repo, stage, pinned_source=pinned_source)
+            _remove_candidate_outputs(stage)
+            snapshot = build_snapshot(stage)
+            pointer_path = stage / "pointers" / "latest.json"
+            pointer_path.parent.mkdir(parents=True, exist_ok=True)
+            pointer_path.write_bytes(canonical_json(Pointer(snapshot=snapshot)))
+            select_snapshot(stage)
+            render_schemas(stage)
+            _compare_tree_bytes(
+                repo, stage / "public", repo / "public", check, collector
+            )
+            _compare_file_bytes(
+                repo,
+                pointer_path,
+                repo / "pointers" / "latest.json",
+                check,
+                collector,
+            )
+            _compare_file_bytes(
+                repo,
+                stage / "vercel.json",
+                repo / "vercel.json",
+                check,
+                collector,
+            )
+    except (OSError, RenderError, ValueError) as exc:
         collector.add(check, display_path(repo, repo), str(exc))
 
 
@@ -154,7 +201,9 @@ def _compare_file_bytes(
         collector.add(check, display_path(repo, committed), "reproduced bytes drift")
 
 
-def _copy_render_inputs(repo: Path, stage: Path) -> None:
+def _copy_render_inputs(
+    repo: Path, stage: Path, *, pinned_source: Path | None = None
+) -> None:
     stage.mkdir(parents=True)
     for name in ("upstream", "bootstrap", "releases", "pointers"):
         source = repo / name
@@ -173,8 +222,9 @@ def _copy_render_inputs(repo: Path, stage: Path) -> None:
     # inputs: a fresh render reproduces only the selected snapshot's blobs, so
     # every earlier snapshot's would otherwise be missing. Moving documents,
     # schemas, healthz, and other public paths are recreated by the render.
+    pinned_root = repo / "public" if pinned_source is None else Path(pinned_source)
     for name in ("s", "i"):
-        pinned = repo / "public" / name
+        pinned = pinned_root / name
         if pinned.is_symlink():
             (stage / "public").mkdir(parents=True, exist_ok=True)
             (stage / "public" / name).symlink_to(
@@ -182,3 +232,20 @@ def _copy_render_inputs(repo: Path, stage: Path) -> None:
             )
         elif pinned.is_dir():
             shutil.copytree(pinned, stage / "public" / name, symlinks=True)
+
+
+def _remove_candidate_outputs(stage: Path) -> None:
+    """Remove only documents recreated by the candidate render pipeline."""
+
+    for relative in (
+        Path("pointers/latest.json"),
+        Path("public/registry.json"),
+        Path("public/v1/snapshots.json"),
+        Path("public/v1/schema"),
+        Path("public/healthz"),
+    ):
+        path = stage / relative
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)

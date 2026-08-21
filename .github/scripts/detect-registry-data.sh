@@ -2,7 +2,7 @@
 set -euo pipefail
 
 present=false
-for root in upstream bootstrap releases pointers public; do
+for root in upstream bootstrap releases promotion pointers public sources; do
   if [[ -e "$root" || -L "$root" ]]; then
     present=true
     break
