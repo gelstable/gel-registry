@@ -1,21 +1,35 @@
 """The hosting boundary: a static tree served verbatim.
 
 Nothing runs in production. Vercel uploads `public/` exactly as it was
-committed, and the only policy it carries is how long each class of path may be
-cached — pinned snapshot trees forever, the two moving documents briefly. CI
-decides whether a change touches registry data at all by looking for the data
-roots on disk, so that detector is part of the same boundary.
+committed, and the policy it carries is how long each class of path may be
+cached — pinned snapshot trees forever, the moving documents briefly — plus the
+rewrites that let a legacy `GEL_PKG_ROOT` client address the selected snapshot
+through the paths it already knows. A rewrite resolves to a file that is in the
+same uploaded tree, so it adds a name for existing bytes rather than a code
+path. Because those rewrites name a snapshot, `vercel.json` is rendered by the
+publication transaction and checked here against the selected snapshot rather
+than hand maintained. CI decides whether a change touches registry data at all
+by looking for the data roots on disk, so that detector is part of the same
+boundary.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from gel_registry.contracts import RootManifest
+from gel_registry.render.hosting import (
+    MOVING_CACHE_CONTROL,
+    PINNED_CACHE_CONTROL,
+    hosting_config,
+)
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 VERCEL_PATH = REPOSITORY_ROOT / "vercel.json"
@@ -24,10 +38,9 @@ PRODUCTION_HOSTNAME = "registry.gelstable.com"
 STALE_HOSTNAME = "registry.gelstable.org"
 HOSTING_PATHS = ("vercel.json", ".github", "docs")
 
-MOVING_CACHE_CONTROL = (
-    "public, max-age=0, s-maxage=60, stale-while-revalidate=600, stale-if-error=86400"
-)
-PINNED_CACHE_CONTROL = "public, max-age=31536000, s-maxage=31536000, immutable"
+SNAPSHOT_LISTING = REPOSITORY_ROOT / "public" / "v1" / "snapshots.json"
+MOVING_ROOT = REPOSITORY_ROOT / "public" / "registry.json"
+BLOB_DESTINATION = re.compile(r"^/i/[0-9a-f]{32}\.json$")
 
 
 def _vercel_config() -> dict[str, Any]:
@@ -57,14 +70,7 @@ def test_vercel_serves_the_public_tree_verbatim_with_no_build_step() -> None:
 
     assert config["outputDirectory"] == "public"
     assert config.get("framework") is None
-    for forbidden in (
-        "functions",
-        "buildCommand",
-        "rewrites",
-        "redirects",
-        "routes",
-        "builds",
-    ):
+    for forbidden in ("functions", "buildCommand", "redirects", "routes", "builds"):
         assert forbidden not in config
 
 
@@ -76,6 +82,55 @@ def test_pinned_trees_are_immutable_and_moving_documents_are_revalidated() -> No
         "/s/(.*)": PINNED_CACHE_CONTROL,
         "/registry.json": MOVING_CACHE_CONTROL,
         "/v1/(.*)": MOVING_CACHE_CONTROL,
+    }
+
+
+def _moving_manifest() -> RootManifest:
+    if not MOVING_ROOT.is_file():
+        pytest.skip("no snapshot has been selected yet")
+    return RootManifest.model_validate_json(MOVING_ROOT.read_bytes())
+
+
+def test_legacy_index_rewrites_address_the_selected_snapshot() -> None:
+    """The committed configuration matches a fresh render of the selection."""
+
+    assert VERCEL_PATH.read_bytes() == hosting_config(_moving_manifest())
+
+
+def test_legacy_rewrites_enumerate_exactly_the_published_indexes() -> None:
+    """One literal rule per published index, with no pattern to disambiguate."""
+
+    manifest = _moving_manifest()
+    rewrites = _vercel_config()["rewrites"]
+    suffixes = {"stable": "", "nightly": ".nightly", "testing": ".testing"}
+
+    assert [rule["source"] for rule in rewrites] == [
+        f"/archive/.jsonindexes/{item.platform}{suffixes[item.channel]}.json"
+        for item in manifest.indexes
+    ]
+    # Literal sources: nothing can read "...darwin.nightly" as a platform name,
+    # so no rule depends on being emitted before or after another.
+    assert all(":" not in rule["source"] for rule in rewrites)
+    # A (channel, platform) pair without an index gets no rule and 404s, rather
+    # than a rule pointing at a blob that was never published.
+    assert len(rewrites) == len(manifest.indexes)
+    assert len({rule["source"] for rule in rewrites}) == len(rewrites)
+
+
+def test_rewrite_destinations_exist_in_the_published_tree() -> None:
+    manifest = _moving_manifest()
+    rewrites = _vercel_config()["rewrites"]
+    assert rewrites, "selected snapshot publishes no indexes"
+
+    for rule in rewrites:
+        destination = rule["destination"]
+        assert BLOB_DESTINATION.fullmatch(destination), destination
+        blob = REPOSITORY_ROOT / "public" / destination.lstrip("/")
+        assert blob.is_file(), destination
+    # Every rewrite lands on a blob the moving root also names, so the legacy
+    # path and the manifest path resolve to the same bytes.
+    assert {rule["destination"] for rule in rewrites} == {
+        f"/{item.url}" for item in manifest.indexes
     }
 
 

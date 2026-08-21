@@ -34,13 +34,18 @@ _MUTABLE_PATHS = frozenset(
         "pointers/latest.json",
         "public/registry.json",
         "public/v1/snapshots.json",
+        "vercel.json",
     }
 )
 _MOVING_PATHS = (
     "public/registry.json",
     "public/v1/snapshots.json",
+    "vercel.json",
     "pointers/latest.json",
 )
+#: Generated files that sit at the repository root rather than inside one of
+#: the source families, because the host reads them from there.
+_ROOT_FILES = ("vercel.json",)
 _MIGRATED_SUPPORT_PATH = "public/v1/schema/release-record.json"
 _SUPPORT_PATHS = frozenset(
     {
@@ -273,8 +278,27 @@ def _compare_family(
         raise PublicationError(f"immutable path changed: {full}")
 
 
+def _compare_root_file(
+    repo: Path,
+    stage: Path,
+    relative: str,
+    *,
+    changed: set[str],
+) -> None:
+    """Compare one generated repository-root file outside the source families."""
+
+    existing = _prior_file(repo / relative, relative)
+    candidate = _prior_file(stage / relative, f"staged {relative}")
+    if candidate is None:
+        raise PublicationError(f"publication did not render {relative}")
+    if existing != candidate:
+        changed.add(relative)
+
+
 def _compare_transaction(repo: Path, stage: Path, *, snapshot: str) -> tuple[str, ...]:
     changed: set[str] = set()
+    for relative in _ROOT_FILES:
+        _compare_root_file(repo, stage, relative, changed=changed)
     for name in _SOURCE_ROOTS:
         _compare_family(repo, stage, name, snapshot=snapshot, changed=changed)
     return tuple(sorted(changed))

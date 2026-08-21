@@ -1,4 +1,4 @@
-"""Pointer-driven publication of the two moving public documents."""
+"""Pointer-driven publication of the moving documents."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from ..digest import blob_id, canonical_json
 from . import files
 from .compose import root_for_indexes
 from .errors import RenderError
+from .hosting import hosting_config
 from .snapshots import MOVING_BLOB_PREFIX, load_pinned_snapshot
 
 _SNAPSHOT_ID = re.compile(r"^[0-9a-f]{16}$")
@@ -46,11 +47,10 @@ def select_snapshot(repo: Path) -> None:
         MOVING_BLOB_PREFIX,
     )
     listing = SnapshotListing(latest=selected, snapshots=snapshots)
-    _publish_moving_pair(
-        public / "registry.json",
-        canonical_json(moving),
-        public / "v1" / "snapshots.json",
-        canonical_json(listing),
+    _publish_moving_documents(
+        (public / "registry.json", canonical_json(moving), "moving root"),
+        (public / "v1" / "snapshots.json", canonical_json(listing), "snapshot listing"),
+        (repo / "vercel.json", hosting_config(moving), "hosting configuration"),
     )
 
 
@@ -119,31 +119,25 @@ def _restore_target(path: Path, previous: bytes | None, label: str) -> None:
     files.atomic_replace(path, previous, label)
 
 
-def _publish_moving_pair(
-    root_path: Path,
-    root_bytes: bytes,
-    listing_path: Path,
-    listing_bytes: bytes,
-) -> None:
-    """Publish the two moving documents as a failure-safe pair.
+def _publish_moving_documents(*targets: tuple[Path, bytes, str]) -> None:
+    """Publish the moving documents as one failure-safe group.
 
     There is no single portable filesystem primitive that atomically switches
-    two independent files.  Both targets are therefore preflighted before any
-    mutation, and if the second replacement fails the first is restored from
-    its captured prior bytes.
+    several independent files.  Every target is therefore preflighted before
+    any mutation, and if a later replacement fails the earlier ones are
+    restored from their captured prior bytes.
     """
 
-    _preflight_target(root_path, "moving root")
-    _preflight_target(listing_path, "snapshot listing")
-    prior_root = _prior_bytes(root_path)
-    prior_listing = _prior_bytes(listing_path)
+    for path, _, label in targets:
+        _preflight_target(path, label)
+    prior = [_prior_bytes(path) for path, _, _ in targets]
     try:
-        _atomic_replace(root_path, root_bytes, "moving root")
-        _atomic_replace(listing_path, listing_bytes, "snapshot listing")
+        for path, data, label in targets:
+            _atomic_replace(path, data, label)
     except RenderError as exc:
         try:
-            _restore_target(root_path, prior_root, "moving root rollback")
-            _restore_target(listing_path, prior_listing, "snapshot listing rollback")
+            for (path, _, label), previous in zip(targets, prior, strict=True):
+                _restore_target(path, previous, f"{label} rollback")
         except RenderError as rollback_error:
             raise RenderError(
                 "moving-document publication failed and rollback failed: "

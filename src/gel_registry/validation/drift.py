@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ..render import RenderError, build_snapshot, render_schemas, select_snapshot
 from .report import Collector
-from .support import CAPTURE_REL, display_path, tree_files
+from .support import CAPTURE_REL, display_path, read_file, tree_files
 
 
 def check_render_drift(repo: Path, collector: Collector) -> None:
@@ -42,6 +42,14 @@ def check_render_drift(repo: Path, collector: Collector) -> None:
                         check,
                         display_path(repo, repo / "public" / "v1" / "snapshots.json"),
                         "fresh snapshot selection did not produce the moving pair",
+                    )
+                else:
+                    _compare_file_bytes(
+                        repo,
+                        stage / "vercel.json",
+                        repo / "vercel.json",
+                        check,
+                        collector,
                     )
             try:
                 render_schemas(stage)
@@ -127,6 +135,23 @@ def _compare_tree_bytes(
             collector.add(
                 check, display_path(repo, committed / relative), "rendered bytes drift"
             )
+
+
+def _compare_file_bytes(
+    repo: Path,
+    candidate: Path,
+    committed: Path,
+    check: str,
+    collector: Collector,
+) -> None:
+    try:
+        candidate_bytes = read_file(candidate)
+        committed_bytes = read_file(committed)
+    except (OSError, ValueError) as exc:
+        collector.add(check, display_path(repo, committed), str(exc))
+        return
+    if candidate_bytes != committed_bytes:
+        collector.add(check, display_path(repo, committed), "reproduced bytes drift")
 
 
 def _copy_render_inputs(repo: Path, stage: Path) -> None:
