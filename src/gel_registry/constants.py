@@ -33,6 +33,12 @@ CLI_PLATFORMS: Final = (
     "aarch64-pc-windows-msvc",
 )
 
+# Release assets are downloaded into temporary runner storage. These registry-
+# owned ceilings bound both one asset and one selected release asset set before
+# any upstream bytes are streamed.
+MAX_ASSET_BYTES: Final = 512 * 1024 * 1024
+MAX_TOTAL_ASSET_BYTES: Final = 2 * 1024 * 1024 * 1024
+
 # Compatibility mapping for callers that have not migrated to SourcePolicy yet.
 # It is intentionally retained until the later migration cleanup.
 PRODUCT_REPOSITORIES: Final = {
