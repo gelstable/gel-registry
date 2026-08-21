@@ -1,0 +1,135 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "description": "One independently verified Gelstable release artifact.",
+      "properties": {
+        "blake2b": {
+          "title": "Blake2B",
+          "type": "string"
+        },
+        "encoding": {
+          "enum": [
+            "identity",
+            "zstd"
+          ],
+          "title": "Encoding",
+          "type": "string"
+        },
+        "media_type": {
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "platform": {
+          "minLength": 1,
+          "title": "Platform",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        },
+        "url": {
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "encoding",
+        "media_type",
+        "url",
+        "size",
+        "sha256",
+        "blake2b"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "ReleaseSource": {
+      "additionalProperties": false,
+      "description": "GitHub release provenance recorded with a promoted version.",
+      "properties": {
+        "release_id": {
+          "exclusiveMinimum": 0,
+          "title": "Release Id",
+          "type": "integer"
+        },
+        "release_tag": {
+          "minLength": 1,
+          "title": "Release Tag",
+          "type": "string"
+        },
+        "repository": {
+          "minLength": 1,
+          "title": "Repository",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "release_tag",
+        "release_id"
+      ],
+      "title": "ReleaseSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Append-only, complete stable Gel CLI release record.",
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/Artifact"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "channel": {
+      "const": "stable",
+      "title": "Channel",
+      "type": "string"
+    },
+    "product": {
+      "const": "gel-cli",
+      "title": "Product",
+      "type": "string"
+    },
+    "promoted_at": {
+      "format": "date-time",
+      "title": "Promoted At",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source": {
+      "$ref": "#/$defs/ReleaseSource"
+    },
+    "version": {
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "product",
+    "channel",
+    "version",
+    "source",
+    "promoted_at",
+    "artifacts"
+  ],
+  "title": "ReleaseRecord",
+  "type": "object"
+}

@@ -12,7 +12,7 @@ from typing import cast
 
 import httpx
 
-from . import capture, normalize
+from . import capture, normalize, publication, render, validation
 from .constants import CAPTURE_ID
 from .contracts import CaptureManifest
 
@@ -98,6 +98,37 @@ def _run_normalize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_build_snapshot(args: argparse.Namespace) -> int:
+    print(render.build_snapshot(Path(args.repo)))
+    return 0
+
+
+def _run_select_snapshot(args: argparse.Namespace) -> int:
+    render.select_snapshot(Path(args.repo))
+    print("ok")
+    return 0
+
+
+def _run_publish_bootstrap(args: argparse.Namespace) -> int:
+    result = publication.publish_bootstrap(Path(args.repo))
+    print(result.snapshot)
+    return 0
+
+
+def _print_report(report: validation.ValidationReport) -> int:
+    if report.ok:
+        print("ok")
+        return 0
+    for error in report.errors:
+        print(f"error: {_error_text(ValueError(error))}", file=sys.stderr)
+    return 1
+
+
+def _run_validate(args: argparse.Namespace) -> int:
+    report = validation.validate_local(Path(args.repo), args.base)
+    return _print_report(report)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gel-registry")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -129,6 +160,36 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     normalize_parser.set_defaults(handler=_run_normalize)
 
+    build_parser = commands.add_parser(
+        "build-snapshot", help="build one immutable snapshot"
+    )
+    _add_repo(build_parser)
+    build_parser.set_defaults(handler=_run_build_snapshot)
+
+    select_parser = commands.add_parser(
+        "select-snapshot", help="select an existing snapshot through the pointer"
+    )
+    _add_repo(select_parser)
+    select_parser.set_defaults(handler=_run_select_snapshot)
+
+    publish_parser = commands.add_parser(
+        "publish-bootstrap", help="publish and select the bootstrap snapshot"
+    )
+    _add_repo(publish_parser)
+    publish_parser.set_defaults(handler=_run_publish_bootstrap)
+
+    validate_parser = commands.add_parser(
+        "validate", help="run deterministic local validation"
+    )
+    _add_repo(validate_parser)
+    validate_parser.add_argument(
+        "--base",
+        type=Path,
+        default=None,
+        help="optional merge-base tree for immutable-history checks",
+    )
+    validate_parser.set_defaults(handler=_run_validate)
+
     return parser
 
 
@@ -154,4 +215,7 @@ __all__ = [
     "httpx",
     "main",
     "normalize",
+    "publication",
+    "render",
+    "validation",
 ]
