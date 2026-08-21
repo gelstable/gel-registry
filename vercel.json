@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "outputDirectory": "public",
+  "headers": [
+    {
+      "source": "/i/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, s-maxage=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/s/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, s-maxage=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/registry.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=60, stale-while-revalidate=600, stale-if-error=86400"
+        }
+      ]
+    },
+    {
+      "source": "/v1/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, s-maxage=60, stale-while-revalidate=600, stale-if-error=86400"
+        }
+      ]
+    }
+  ]
+}
