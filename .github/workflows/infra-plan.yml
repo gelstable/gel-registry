@@ -1,0 +1,110 @@
+name: Infrastructure plan
+
+# Runs on pull_request, never pull_request_target, so a fork's pull request has
+# no access to TF_API_TOKEN. A fork's plan fails on the missing credential; a
+# maintainer reruns the plan from a branch in this repository.
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra-plan.yml"
+      - "flake.nix"
+      - "flake.lock"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-plan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@33c9ab3ef95cd57c164d9d6eb1f9a46338538d41
+
+      - name: Check formatting
+        run: nix develop --command terraform -chdir=infra fmt -check -recursive
+
+      - name: Initialize
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+        run: nix develop --command terraform -chdir=infra init -input=false
+
+      - name: Validate
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+        run: nix develop --command terraform -chdir=infra validate
+
+      - name: Lint
+        run: |
+          set -euo pipefail
+          nix develop --command tflint --chdir=infra --init
+          nix develop --command tflint --chdir=infra --format compact
+
+      - name: Plan
+        id: plan
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          nix develop --command terraform -chdir=infra plan -input=false -no-color \
+            > "$RUNNER_TEMP/plan.txt" 2>&1 || {
+              status=$?
+              echo "PLAN_FAILED=true" >> "$GITHUB_ENV"
+              exit "$status"
+            }
+
+      - name: Post the plan to the pull request
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const fs = require('fs');
+            const path = `${process.env.RUNNER_TEMP}/plan.txt`;
+            let body;
+            if (fs.existsSync(path)) {
+              // Terraform plan output can exceed GitHub's 65536-character
+              // comment limit. Keep the tail: the resource summary and any
+              // error are at the end.
+              const limit = 60000;
+              let text = fs.readFileSync(path, 'utf8');
+              if (text.length > limit) {
+                text = `[truncated, see the workflow log for the full plan]\n\n` +
+                       text.slice(text.length - limit);
+              }
+              body = `#### Terraform plan\n\n<details><summary>Show plan</summary>\n\n` +
+                     '```terraform\n' + text + '\n```\n\n</details>';
+            } else {
+              body = '#### Terraform plan\n\nThe plan step produced no output. See the workflow log.';
+            }
+
+            const marker = '<!-- infra-plan -->';
+            body = `${marker}\n${body}`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find(
+              c => c.user.type === 'Bot' && c.body.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment(
+                { owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment(
+                { owner, repo, issue_number, body });
+            }

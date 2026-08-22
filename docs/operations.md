@@ -1,102 +1,46 @@
 # Registry hosting and local operations
 
-This runbook describes the production setup for `gelstable/gel-registry` and
-the local operations that produce its checked-in registry tree. The registry is
-a static, versioned distribution index. Vercel publishes the checked-in
-`public/` tree verbatim; it does not run the Python package, fetch legacy
-indexes, download release artifacts, or generate registry bytes during a
-deployment.
+Runbook for production operations and local registry generation for `gelstable/gel-registry`.
 
-The internal `pointers/latest.json` file is an input to the publication tools
-and is never served. `public/s/<snapshot-id>/` and `public/i/` are immutable
-history. The moving `/registry.json` and `/v1/snapshots.json` files are
-generated from the pointer and are the only moving registry documents.
+The registry is an immutable, static distribution index. Vercel serves the checked-in `public/` tree verbatim without build steps, runtime functions, or network fetches.
 
-Index bytes are stored once, addressed by their content, at
-`public/i/<blob-id>.json`. A snapshot is not a directory of index copies but a
-single manifest of relative pointers into that shared store:
-`public/s/<snapshot-id>/registry.json`. A release that changes eight indexes
-therefore adds eight blobs and one manifest; the indexes it did not change are
-referenced by the new snapshot rather than copied into it. A blob is never
-deleted, even once no selected snapshot references it, because older pinned
-snapshots still do and their `immutable` cache header promises they resolve
-forever.
+## Data model & storage layout
 
-The deployment has no functions, no rewrites, no redirects, no build command,
-and no framework preset. There are no build-time network fetches. Each Vercel
-deployment is an immutable static artifact promoted atomically; a provider
-failover must preserve that same static-only contract.
+- `pointers/latest.json`: Internal tool input pointing to the active snapshot (never served).
+- `public/i/<blob-id>.json`: Content-addressed index blobs (SHA-256 truncated to 32 hex chars). Immutable and append-only.
+- `public/s/<snapshot-id>/registry.json`: Snapshot manifest containing relative references to blobs in `public/i/`. Immutable.
+- `public/registry.json` and `public/v1/snapshots.json`: The only moving documents; generated directly from `pointers/latest.json`.
 
-## Repository creation
+Blobs in `public/i/` are never deleted: older snapshots referenced by pinned URLs rely on immutable caching.
 
-1. Create `gelstable/gel-registry` in the `gelstable` GitHub organization and
-   choose the default branch name used by the organization (normally `main`).
-   Keep the repository's visibility and security settings consistent with the
-   organization's distribution-source repositories.
-2. Add the repository's default branch as `origin` and push the reviewed
-   source, workflow, lockfile, and `public/` tree. Do not create a production
-   domain or Vercel project pointing at an empty repository.
-3. In repository Settings, enable Actions only for the checked-in validation
-   workflow and allow only GitHub/verified actions that the workflow pins to
-   full commit SHAs. Keep the default `GITHUB_TOKEN` permission read-only.
-4. Create the branch protection rule below before accepting changes to the
-   registry tree.
+## Repository setup & branch protection
 
-## Default-branch protection
+1. Create `gelstable/gel-registry` on GitHub. Push the initial tree.
+2. Configure Actions permissions to read-only; pin actions to commit SHAs.
+3. Apply branch protection to `main`:
+   - Require pull request with at least one approval; dismiss stale approvals.
+   - Require branches to be up to date and pass status check: `Registry validation / local` (`.github/workflows/validate.yml`).
+   - Restrict push access to maintainers; disable force pushes and branch deletion.
+   - Enforce rules for administrators (no bypasses).
 
-Apply these settings to the default branch:
-
-- Require a pull request before merging, at least one independent approval,
-  dismissal of stale approvals, and resolution of all conversations.
-- Require branches to be up to date before merging and require the exact
-  `Registry validation / local` status check from
-  `.github/workflows/validate.yml`.
-- Restrict who may push to the default branch to the repository maintainers.
-  Disable force pushes (**Allow force pushes: disabled**) and disable branch
-  deletion (**Allow branch deletion: disabled**). Do not permit a workflow token
-  to bypass this rule.
-- Enforce the rule for administrators, keep the bypass list empty, and do not
-  allow direct commits from a deployment provider. Only the protected-branch
-  merge process publishes the reviewed tree.
-
-The required local check is reproducible from a clean checkout:
+Reproduce CI validation locally:
 
 ```text
 uv run pytest -q && uv run mypy src tests && uv run ruff check . && uv run ruff format --check .
 ```
 
-The checked-in workflow has read-only permissions and performs only offline
-validation. Capture, live rehearsal, and bootstrap publication are explicit
-local operations; Vercel never fetches legacy indexes or runs the capture tool
-during deployment.
+## Vercel configuration
 
-## Vercel Git integration
+Infrastructure is declared in `infra/` (see `docs/infrastructure.md`). End-state configuration:
 
-Create one Vercel project for `gelstable/gel-registry` with the following
-settings:
+- Bound to `gelstable/gel-registry`, production branch `main`, root directory `.`.
+- Output directory `public`, framework preset `Other`, install/build commands empty. No Functions, ISR, rewrites, or redirects.
+- Previews enabled for pull requests.
+- Deployment access via Vercel Git integration only. No deployment credentials in GitHub Actions.
 
-- Grant the Vercel Git integration access to this repository only, not the
-  whole organization. Set the production branch to the protected default
-  branch and leave the repository root as the project root.
-- Use the `Other`/static configuration represented by `vercel.json`; output
-  directory is `public`. Leave install and build commands empty. Do not add a
-  Vercel Function, server, ISR route, rewrite, redirect, or build hook.
-- Allow preview deployments for pull requests so that reviewers can inspect
-  the exact checked-in tree. Limit production deployment and domain changes to
-  Vercel project administrators. Give observers the Viewer role and routine
-  maintainers only the least-privilege deployment role.
-- Treat the production deployment as an atomic switch to one reviewed Git
-  commit. Keep the previous deployment available for an emergency provider
-  rollback, then reconcile the Git pointer through the selection-only rollback
-  process below.
-- Do not put a Vercel token or provider credential in GitHub Actions. The Git
-  integration is the only deployment path; repository workflows validate the
-  reviewed tree but do not deploy it.
+### Preview inspection
 
-### Preview inspection and production attachment
-
-Before attaching the production domain, inspect a preview deployment at every
-available public surface:
+Before attaching production domains, inspect preview endpoints:
 
 ```text
 curl --fail --silent --show-error --head https://<preview-host>/healthz
@@ -106,43 +50,24 @@ curl --fail --silent --show-error https://<preview-host>/s/<SNAPSHOT_ID>/registr
 curl --fail --silent --show-error https://<preview-host>/i/<BLOB_ID>.json
 ```
 
-Confirm that `healthz` is the checked-in static body, the moving root points to
-the selected snapshot, the pinned root and indexes are present, and the
-snapshot is nonempty. Confirm in the Vercel deployment inspector that there is
-no serverless function, rewrite, redirect, or build-time network step. Run the
-full local validation command above against the same commit. Attach
-`registry.gelstable.com` only after a reviewed bootstrap selection has produced
-at least one package index; never attach the production domain to an empty
-snapshot.
+Verify `healthz` returns static body, roots point to valid snapshots, and no runtime functions are active. Never attach the production domain to an empty snapshot.
 
 ## DNS and TLS
 
-After preview inspection and the first nonempty publication, add
-`registry.gelstable.com` as the Vercel production domain. Follow the DNS records
-shown by the Vercel project for the chosen zone (for a delegated subdomain this
-is normally a CNAME to Vercel's assigned target). Verify propagation and the
-certificate before announcing the endpoint:
+Attach `registry.gelstable.com` in Vercel once verified. Add DNS CNAME pointing to Vercel. Validate:
 
 ```text
 dig +short registry.gelstable.com CNAME
 curl --fail --silent --show-error --head https://registry.gelstable.com/healthz
 ```
 
-The TLS certificate must be the Vercel-managed certificate for the exact
-production hostname. Do not replace the hostname with an HTTP endpoint or
-accept a certificate warning. If DNS is managed outside the organization,
-record the owner and expiry/renewal path in the on-call handoff.
+Ensure TLS uses the Vercel-managed certificate.
 
-## Local legacy capture
+## Legacy capture (Local only)
 
-Capture and live rehearsal are explicit local operations. They are not build
-steps, deployment steps, or validation-workflow steps. The capture destination
-is `upstream/packages.geldata.com/legacy-2026-08-bootstrap/`; it must be empty
-before capture begins, and `capture` refuses to overwrite an existing
-destination.
+Live captures fetch the 24-entry legacy matrix into `upstream/packages.geldata.com/legacy-2026-08-bootstrap/` (destination must be empty).
 
-For an original/live capture, use a scratch repository root and one reviewed
-RFC3339 UTC timestamp for the entire attempt:
+Run in a scratch directory:
 
 ```text
 CAPTURE_REPO="$(mktemp -d)"
@@ -152,18 +77,11 @@ uv run gel-registry capture \
 uv run gel-registry verify-capture-live --repo "$CAPTURE_REPO"
 ```
 
-The capture command fetches the fixed 24-entry legacy matrix and installs the
-complete evidence tree atomically. The live verification command deliberately
-re-fetches that evidence for a human-reviewed rehearsal. Review the manifest,
-status-dependent metadata, response digests, redirect provenance, and the
-absence of partial output before moving evidence into a review branch.
+Verify digests, manifest status, and redirect provenance before committing.
 
 ## Offline regeneration from committed evidence
 
-Routine regeneration starts from the committed capture evidence and does not
-contact `packages.geldata.com`. To reproduce the checked-in output without
-modifying the current checkout, archive the reviewed commit into a scratch
-root, normalize the capture, publish the bootstrap snapshot, and validate it:
+Regenerate the bootstrap snapshot deterministically from committed capture evidence without network access:
 
 ```text
 REPRODUCTION_REPO="$(mktemp -d)"
@@ -174,101 +92,70 @@ test "$SNAPSHOT_ID" = "0f776b71381237c8"
 uv run gel-registry validate --repo "$REPRODUCTION_REPO"
 ```
 
-The expected bootstrap snapshot is exactly `0f776b71381237c8`. The pinned
-`public/s/0f776b71381237c8/registry.json` and every blob under `public/i/` it
-references are content-addressed and append-only; any byte difference in them
-requires separate review. On the working checkout, the
-non-writing checks are:
+Expected bootstrap snapshot ID: `0f776b71381237c8`.
+
+Non-mutating working tree checks:
 
 ```text
 uv run gel-registry normalize --repo . --check
 uv run gel-registry validate --repo .
 ```
 
-Bootstrap publication may update the pointer and the two moving public
-documents, but it must not rewrite an existing pinned snapshot.
+## Selection rollback
 
-## Selection-only rollback
+Rollbacks update pointers without modifying historical snapshot files:
 
-Rollback is a pointer change, not a reconstruction of history:
+1. Pick a known-good snapshot ID from `public/v1/snapshots.json` and verify its files in a clean checkout.
+2. Update `pointers/latest.json` and run:
+   ```text
+   uv run gel-registry select-snapshot --repo .
+   ```
+3. Run validations:
+   ```text
+   uv run gel-registry validate --repo .
+   ```
+4. Open PR updating only `pointers/latest.json`, `public/registry.json`, and `public/v1/snapshots.json`.
+5. Merge via standard PR flow.
 
-1. Identify an existing known-good ID in `public/v1/snapshots.json` and verify
-   the corresponding `public/s/<snapshot-id>/registry.json` and the
-   `public/i/` blobs it references in a fresh checkout.
-2. On a review branch, set `pointers/latest.json` to that existing ID and run
-   `uv run gel-registry select-snapshot --repo .`.
-3. Run `uv run gel-registry validate --repo .`, the full static validation
-   command, and the preview inspection. Open a pull request containing only
-   the pointer and its two derived moving documents.
-4. Merge through the protected branch after approval. Confirm the Vercel
-   production deployment serves the selected pinned bytes.
+Never edit or delete `public/s/` or `public/i/` files during rollback.
 
-Rollback changes the pointer and regenerates exactly `public/registry.json`
-and `public/v1/snapshots.json`; it does not rewrite pinned snapshots. Never
-delete or edit `public/s/<snapshot-id>/`, `public/i/`, `bootstrap/`, or frozen
-capture evidence as part of a selection rollback. Do not build a new snapshot or
-download an artifact to recreate an already pinned snapshot.
+## CLI validation
 
-## Manual CLI acceptance
-
-After preview inspection, resolve the available server versions through the
-existing CLI with the production registry selected explicitly:
+Test against the production registry with the Gel CLI:
 
 ```text
 GEL_PKG_ROOT=https://registry.gelstable.com gel server list-versions
 ```
 
-Record the selected index, response status, and result with the preview or
-production deployment identifier.
-
 ## Digest audit
 
-For a routine audit, clone the exact production commit into a clean directory,
-run `uv run gel-registry validate --repo .`, and compare the tracked pinned
-tree with the deployment. For each checked-in path, compare the local and
-served bytes rather than parsed JSON:
+Audit production deployment integrity by verifying byte hashes against a clean checkout:
 
 ```text
 curl --fail --silent https://registry.gelstable.com/s/<SNAPSHOT_ID>/registry.json | shasum -a 256
 shasum -a 256 public/s/<SNAPSHOT_ID>/registry.json
+
 curl --fail --silent https://registry.gelstable.com/i/<BLOB_ID>.json | shasum -a 256
 shasum -a 256 public/i/<BLOB_ID>.json
 ```
 
-A blob's filename is the first 32 hex digits of its own SHA-256, so a served
-blob can be checked against its URL without a local copy. Repeat for
-representative blobs, the moving root, and schemas. Record
-the commit, snapshot ID, URL, local digest, served digest, and timestamp. A
-digest mismatch blocks publication or triggers the outage procedure; do not
-silently normalize or rewrite a pinned file.
+Blob IDs correspond to the first 32 characters of their SHA-256 hash. Any mismatch blocks releases and triggers incident triage.
 
-## Provider failover and outage triage
+## Outage triage & failover
 
-There are two independent hosts and two different incidents:
+Distinguish registry-host outages from artifact-host outages:
 
-### Registry-host outage
+### Registry-host outage (Vercel / DNS / TLS)
+Registry metadata and `/healthz` fail; artifact downloads may still work.
+1. Deploy the reviewed commit and `public/` directory to the pre-approved backup static host.
+2. Verify headers and byte hashes.
+3. Update DNS CNAME to the backup provider.
+4. Restore primary provider once resolved and repeat digest audit.
 
-This is an outage of Vercel or the `registry.gelstable.com` DNS/TLS path. The
-registry metadata and static health endpoint are unavailable even though the
-artifact URLs may still work. Deploy the same reviewed Git commit and
-unchanged `public/` directory to the pre-approved alternate static provider,
-verify the byte and header checks there, and change DNS only through the
-provider's documented cutover. The alternate provider must serve files
-verbatim, with no server, functions, rewrites, redirects, or network fetches.
-Restore the primary provider after it is healthy and repeat the digest audit.
+### Artifact-host outage (`packages.geldata.com`)
+Registry JSON responds normally, but binary downloads (`installref`) fail.
+1. Do **not** modify registry snapshots or rollback pointers.
+2. Page artifact host / CDN owners.
+3. Verify artifact hashes against recorded digests after recovery.
 
-### Artifact-host outage
-
-This is an outage of `packages.geldata.com` or another host named by an
-`installref`. Registry JSON may still be available, while package downloads
-fail. Do not roll the registry pointer or edit a pinned index as a response to
-an artifact-host outage. Page the artifact/CDN owner, restore the artifact
-service or its documented alias, and verify representative installrefs and
-their recorded digests before closing the incident. Preserve the registry
-snapshot and its audit evidence throughout.
-
-If both hosts are impaired, declare both incidents, preserve the last known
-good Git commit and snapshot ID, and coordinate the two provider recoveries
-separately. `stale-if-error` is a requested cache policy documented in
-`docs/hosting-observations.md`; it is not an availability guarantee or a
-substitute for provider failover.
+If both fail, track both incidents independently. Keep last known good Git commit and snapshot ID intact.
