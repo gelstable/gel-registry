@@ -1,6 +1,6 @@
 """Rendering of the hosting configuration from the selected snapshot.
 
-Vercel reads ``vercel.json`` from the repository root, so the one policy that
+Vercel reads ``vercel.toml`` from the repository root, so the one policy that
 has to name a snapshot -- the legacy ``GEL_PKG_ROOT`` compatibility rewrites --
 cannot live under ``public/`` with the rest of the published tree.  The file is
 therefore rendered in full from the selected snapshot rather than hand
@@ -14,9 +14,10 @@ directly; no code runs in production.
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
+
+import tomli_w
 
 from ..contracts import RootManifest
 from .errors import RenderError
@@ -110,7 +111,7 @@ def hosting_config(manifest: RootManifest) -> bytes:
         ],
         "rewrites": list(rewrites),
     }
-    return (json.dumps(config, indent=2) + "\n").encode("utf-8")
+    return tomli_w.dumps(config).encode("utf-8")
 
 
 __all__ = ["MAX_ROUTES", "hosting_config", "legacy_rewrites"]

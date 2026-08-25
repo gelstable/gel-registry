@@ -1,6 +1,6 @@
 # Hosting observations
 
-Log of measured response headers from static deployments. Cache policies defined in `vercel.json` are requested directives, not guarantees of stale serving during upstream outages.
+Log of measured response headers from static deployments. Cache policies defined in `vercel.toml` are requested directives, not guarantees of stale serving during upstream outages.
 
 ## Requested cache policy
 

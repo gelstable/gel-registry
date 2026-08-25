@@ -39,7 +39,7 @@ Infrastructure is declared in `infra/` (see `docs/infrastructure.md`). End-state
   `/archive/.jsonindexes/<platform><channel>.json` aliases, one literal rule per
   published index, which let a client configured with `GEL_PKG_ROOT` address the
   selected snapshot through the paths it already knows.
-- `vercel.json` is rendered from the selected snapshot by
+- `vercel.toml` is rendered from the selected snapshot by
   `gel_registry.render.hosting.hosting_config`, not hand-edited. Verify it with
   `uv run gel-registry validate --repo .`, which fails on any drift between the
   committed file and a fresh render.

@@ -46,8 +46,8 @@ def check_render_drift(repo: Path, collector: Collector) -> None:
                 else:
                     _compare_file_bytes(
                         repo,
-                        stage / "vercel.json",
-                        repo / "vercel.json",
+                        stage / "vercel.toml",
+                        repo / "vercel.toml",
                         check,
                         collector,
                     )

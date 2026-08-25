@@ -47,7 +47,7 @@ MUTABLE_PATHS = (
     "pointers/latest.json",
     "public/registry.json",
     "public/v1/snapshots.json",
-    "vercel.json",
+    "vercel.toml",
 )
 RELEASE_RECORD_SCHEMA = "public/v1/schema/release-record.json"
 #: A moving root sits at ``public/``; a pinned root two levels below it. The

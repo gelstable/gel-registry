@@ -50,7 +50,7 @@ def select_snapshot(repo: Path) -> None:
     _publish_moving_documents(
         (public / "registry.json", canonical_json(moving), "moving root"),
         (public / "v1" / "snapshots.json", canonical_json(listing), "snapshot listing"),
-        (repo / "vercel.json", hosting_config(moving), "hosting configuration"),
+        (repo / "vercel.toml", hosting_config(moving), "hosting configuration"),
     )
 
 

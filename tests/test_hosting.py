@@ -6,7 +6,7 @@ cached — pinned snapshot trees forever, the moving documents briefly — plus 
 rewrites that let a legacy `GEL_PKG_ROOT` client address the selected snapshot
 through the paths it already knows. A rewrite resolves to a file that is in the
 same uploaded tree, so it adds a name for existing bytes rather than a code
-path. Because those rewrites name a snapshot, `vercel.json` is rendered by the
+path. Because those rewrites name a snapshot, `vercel.toml` is rendered by the
 publication transaction and checked here against the selected snapshot rather
 than hand maintained. CI decides whether a change touches registry data at all
 by looking for the data roots on disk, so that detector is part of the same
@@ -15,10 +15,10 @@ boundary.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -32,11 +32,11 @@ from gel_registry.render.hosting import (
 )
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
-VERCEL_PATH = REPOSITORY_ROOT / "vercel.json"
+VERCEL_PATH = REPOSITORY_ROOT / "vercel.toml"
 DETECTOR = REPOSITORY_ROOT / ".github" / "scripts" / "detect-registry-data.sh"
 PRODUCTION_HOSTNAME = "registry.gelstable.com"
 STALE_HOSTNAME = "registry.gelstable.org"
-HOSTING_PATHS = ("vercel.json", ".github", "docs")
+HOSTING_PATHS = ("vercel.toml", ".github", "docs")
 
 SNAPSHOT_LISTING = REPOSITORY_ROOT / "public" / "v1" / "snapshots.json"
 MOVING_ROOT = REPOSITORY_ROOT / "public" / "registry.json"
@@ -46,7 +46,7 @@ BLOB_DESTINATION = re.compile(r"^/i/[0-9a-f]{32}\.json$")
 def _vercel_config() -> dict[str, Any]:
     if not VERCEL_PATH.is_file():
         pytest.skip("committed hosting configuration is not present yet")
-    value = json.loads(VERCEL_PATH.read_bytes())
+    value = tomllib.loads(VERCEL_PATH.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
 

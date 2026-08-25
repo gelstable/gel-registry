@@ -34,18 +34,18 @@ _MUTABLE_PATHS = frozenset(
         "pointers/latest.json",
         "public/registry.json",
         "public/v1/snapshots.json",
-        "vercel.json",
+        "vercel.toml",
     }
 )
 _MOVING_PATHS = (
     "public/registry.json",
     "public/v1/snapshots.json",
-    "vercel.json",
+    "vercel.toml",
     "pointers/latest.json",
 )
 #: Generated files that sit at the repository root rather than inside one of
 #: the source families, because the host reads them from there.
-_ROOT_FILES = ("vercel.json",)
+_ROOT_FILES = ("vercel.toml",)
 _MIGRATED_SUPPORT_PATH = "public/v1/schema/release-record.json"
 _SUPPORT_PATHS = frozenset(
     {
