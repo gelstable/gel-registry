@@ -14,16 +14,16 @@
           "title": "Platform",
           "type": "string"
         },
-        "url": {
+        "ref": {
           "minLength": 1,
-          "title": "Url",
+          "title": "Ref",
           "type": "string"
         }
       },
       "required": [
         "channel",
         "platform",
-        "url"
+        "ref"
       ],
       "title": "RootIndex",
       "type": "object"

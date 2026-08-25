@@ -69,7 +69,7 @@ def root_for_indexes(blobs: Mapping[tuple[str, str], str], prefix: str) -> RootM
         RootIndex(
             channel=channel,
             platform=platform,
-            url=f"{prefix}{identity}.json",
+            ref=f"{prefix}{identity}.json",
         )
         for (channel, platform), identity in blobs.items()
     )

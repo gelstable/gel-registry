@@ -130,7 +130,7 @@ def test_rewrite_destinations_exist_in_the_published_tree() -> None:
     # Every rewrite lands on a blob the moving root also names, so the legacy
     # path and the manifest path resolve to the same bytes.
     assert {rule["destination"] for rule in rewrites} == {
-        f"/{item.url}" for item in manifest.indexes
+        f"/{item.ref}" for item in manifest.indexes
     }
 
 

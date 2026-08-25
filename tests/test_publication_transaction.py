@@ -68,7 +68,7 @@ def _published_indexes(repo: Path, snapshot: str) -> dict[tuple[str, str], bytes
     root = repo / "public" / "s" / snapshot / "registry.json"
     manifest = RootManifest.model_validate_json(root.read_bytes())
     return {
-        (item.channel, item.platform): (root.parent / item.url).resolve().read_bytes()
+        (item.channel, item.platform): (root.parent / item.ref).resolve().read_bytes()
         for item in manifest.indexes
     }
 
@@ -139,7 +139,7 @@ def test_publication_installs_exactly_the_generated_support_files(
     pinned = tmp_path / "public" / "s" / result.snapshot
     assert {path.name for path in pinned.iterdir()} == {"registry.json"}
     manifest = RootManifest.model_validate_json((pinned / "registry.json").read_bytes())
-    assert [item.url for item in manifest.indexes] == [f"../../i/{identity}.json"]
+    assert [item.ref for item in manifest.indexes] == [f"../../i/{identity}.json"]
     assert (tmp_path / "public" / "i" / f"{identity}.json").read_bytes() == index_bytes
 
     # The snapshot identity is exactly the hash of the *logical* index map --
@@ -148,7 +148,7 @@ def test_publication_installs_exactly_the_generated_support_files(
     assert result.snapshot == snapshot_id(
         {
             PurePosixPath("index") / f"{item.channel}-{item.platform}.json": (
-                tmp_path / "public" / "i" / Path(item.url).name
+                tmp_path / "public" / "i" / Path(item.ref).name
             ).read_bytes()
             for item in manifest.indexes
         }
@@ -267,7 +267,7 @@ def test_the_pointer_alone_selects_which_snapshot_the_moving_documents_serve(
     listing = json.loads((tmp_path / "public" / "v1" / "snapshots.json").read_bytes())
     # The moving root points into the shared blob store, not into a snapshot
     # directory, and resolves to exactly the bytes the pinned root does.
-    assert {entry["url"] for entry in root["indexes"]} == {
+    assert {entry["ref"] for entry in root["indexes"]} == {
         f"i/{blob_id(data)}.json" for data in _published_indexes(tmp_path, old).values()
     }
     assert listing["latest"] == old
@@ -500,8 +500,8 @@ def test_an_unchanged_index_is_stored_once_and_shared_by_every_snapshot(
     assert _blob_names(tmp_path) - first_blobs != set()
     assert len(_blob_names(tmp_path)) == len(first_blobs) + 1
 
-    first_urls = {(i.channel, i.platform): i.url for i in first_manifest.indexes}
-    second_urls = {(i.channel, i.platform): i.url for i in second_manifest.indexes}
+    first_urls = {(i.channel, i.platform): i.ref for i in first_manifest.indexes}
+    second_urls = {(i.channel, i.platform): i.ref for i in second_manifest.indexes}
     changed = {key for key in first_urls if first_urls[key] != second_urls.get(key)}
     assert changed == {("stable", LEGACY_PLATFORMS[0])}
     # Every other index is referenced by URL, not copied.
@@ -569,8 +569,8 @@ def test_both_roots_resolve_to_the_same_index_files(
         manifest = RootManifest.model_validate_json(root.read_bytes())
         resolved: dict[tuple[str, str], Path] = {}
         for item in manifest.indexes:
-            assert not item.url.startswith("/"), item.url
-            resolved[(item.channel, item.platform)] = (root.parent / item.url).resolve(
+            assert not item.ref.startswith("/"), item.ref
+            resolved[(item.channel, item.platform)] = (root.parent / item.ref).resolve(
                 strict=True
             )
         return resolved
@@ -580,5 +580,5 @@ def test_both_roots_resolve_to_the_same_index_files(
     # And the URL forms each document must carry, given where it lives.
     moving = RootManifest.model_validate_json(moving_root.read_bytes())
     pinned = RootManifest.model_validate_json(pinned_root.read_bytes())
-    assert all(MOVING_URL.fullmatch(item.url) for item in moving.indexes)
-    assert all(PINNED_URL.fullmatch(item.url) for item in pinned.indexes)
+    assert all(MOVING_URL.fullmatch(item.ref) for item in moving.indexes)
+    assert all(PINNED_URL.fullmatch(item.ref) for item in pinned.indexes)

@@ -18,7 +18,7 @@ class RootIndex(BaseModel):
 
     channel: StrictString
     platform: StrictString
-    url: StrictString
+    ref: StrictString
 
     @model_validator(mode="after")
     def validate_root_index(self) -> RootIndex:
@@ -26,7 +26,7 @@ class RootIndex(BaseModel):
             raise ValueError(f"unknown channel {self.channel!r}")
         if self.platform not in LEGACY_PLATFORMS:
             raise ValueError(f"unknown platform {self.platform!r}")
-        parsed = urlsplit(self.url)
+        parsed = urlsplit(self.ref)
         if (
             parsed.fragment
             or parsed.username is not None
@@ -36,12 +36,6 @@ class RootIndex(BaseModel):
         if parsed.scheme or parsed.netloc:
             raise ValueError("root index URL must be relative")
         return self
-
-    @property
-    def ref(self) -> str:
-        """Compatibility alias for callers that call index references ``ref``."""
-
-        return self.url
 
 
 class RootManifest(BaseModel):
