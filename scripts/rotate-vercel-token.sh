@@ -27,11 +27,19 @@ WORKSPACE="${TF_WORKSPACE:-gel-registry}"
 VAR_KEY="vercel_api_token"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+die() {
+  echo "error: $*" >&2
+  exit 1
+}
+
 old_token_id=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --old-token-id)
-      old_token_id="${2:-}"
+      # `shift 2` with no value would exit silently under `set -e`, which makes
+      # a typo look like an unexplained failure.
+      [[ $# -ge 2 ]] || die "--old-token-id requires a value"
+      old_token_id="$2"
       shift 2
       ;;
     -h | --help)
@@ -44,11 +52,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
-die() {
-  echo "error: $*" >&2
-  exit 1
-}
 
 for cmd in curl jq terraform; do
   command -v "$cmd" >/dev/null || die "$cmd not found; run inside 'nix develop'"
@@ -77,6 +80,23 @@ tfe_api() {
     "https://app.terraform.io/api/v2${path}" "$@"
 }
 
+# --- Resolve the workspace before touching anything --------------------------
+# The lookup has to happen first: the team the configuration targets is an HCP
+# workspace variable, and the scope check below needs it.
+
+echo "Locating the HCP workspace ${ORG}/${WORKSPACE}."
+workspace_id="$(tfe_api GET "/organizations/${ORG}/workspaces/${WORKSPACE}" |
+  jq -r '.data.id')"
+[[ -n "$workspace_id" && "$workspace_id" != "null" ]] ||
+  die "could not resolve workspace ${ORG}/${WORKSPACE}"
+
+workspace_vars="$(tfe_api GET "/workspaces/${workspace_id}/vars")"
+
+var_id="$(jq -r --arg k "$VAR_KEY" \
+  '.data[] | select(.attributes.key == $k) | .id' <<<"$workspace_vars")"
+[[ -n "$var_id" ]] ||
+  die "workspace variable ${VAR_KEY} not found; create it in HCP first"
+
 # --- Verify the token before writing it anywhere -----------------------------
 
 echo "Verifying the new token against the Vercel API."
@@ -90,31 +110,27 @@ echo "  authenticated as: $(jq -r '.user.username // .user.email // "unknown"' <
 
 # Scope, not the token value, is what usually goes wrong. Confirm the token can
 # actually see the team the configuration targets.
-team_id="$(terraform -chdir="$REPO_ROOT/infra" console <<<'var.vercel_team_id' 2>/dev/null |
-  tr -d '"' || true)"
+#
+# The value comes from the HCP workspace, not from `terraform console`: the
+# working tree defaults `var.vercel_team_id` to null, so a local lookup would
+# resolve to nothing and silently skip the one check that matters. This
+# variable is not sensitive, so the API returns its value.
+team_id="${VERCEL_TEAM_ID:-$(jq -r \
+  '.data[] | select(.attributes.key == "vercel_team_id") | .attributes.value // ""' \
+  <<<"$workspace_vars")}"
 
-if [[ -n "$team_id" && "$team_id" != "null" ]]; then
-  curl --fail --silent --show-error \
-    --header "Authorization: Bearer $new_token" \
-    "https://api.vercel.com/v2/teams/${team_id}" >/dev/null ||
-    die "the new token authenticated but cannot see team ${team_id}; its scope is wrong"
-  echo "  team scope confirmed: ${team_id}"
-else
-  echo "  no team configured; skipping the team scope check"
-fi
+[[ -n "$team_id" && "$team_id" != "null" ]] ||
+  die "could not resolve the target team. Set the vercel_team_id workspace
+       variable in HCP, or pass VERCEL_TEAM_ID. Scope is what usually goes
+       wrong in a rotation, so this check is not skippable."
+
+curl --fail --silent --show-error \
+  --header "Authorization: Bearer $new_token" \
+  "https://api.vercel.com/v2/teams/${team_id}" >/dev/null ||
+  die "the new token authenticated but cannot see team ${team_id}; its scope is wrong"
+echo "  team scope confirmed: ${team_id}"
 
 # --- Install it as the workspace variable ------------------------------------
-
-echo "Locating the HCP workspace ${ORG}/${WORKSPACE}."
-workspace_id="$(tfe_api GET "/organizations/${ORG}/workspaces/${WORKSPACE}" |
-  jq -r '.data.id')"
-[[ -n "$workspace_id" && "$workspace_id" != "null" ]] ||
-  die "could not resolve workspace ${ORG}/${WORKSPACE}"
-
-var_id="$(tfe_api GET "/workspaces/${workspace_id}/vars" |
-  jq -r --arg k "$VAR_KEY" '.data[] | select(.attributes.key == $k) | .id')"
-[[ -n "$var_id" ]] ||
-  die "workspace variable ${VAR_KEY} not found; create it in HCP first"
 
 echo "Updating workspace variable ${VAR_KEY}."
 jq -n --arg id "$var_id" --arg value "$new_token" \
@@ -127,9 +143,13 @@ jq -n --arg id "$var_id" --arg value "$new_token" \
 echo "Running a plan with the new token."
 terraform -chdir="$REPO_ROOT/infra" init -input=false >/dev/null
 if ! terraform -chdir="$REPO_ROOT/infra" plan -input=false -no-color; then
-  die "the plan failed with the new token. The old token is still valid and
-       still installed nowhere; restore the previous value in HCP and
-       investigate before revoking anything."
+  die "the plan failed with the new token, which is now the value of the
+       ${VAR_KEY} workspace variable in ${ORG}/${WORKSPACE}. The old token is
+       still live and has not been revoked, but its value was not captured and
+       HCP will not return it. To recover: re-run this script with a
+       correctly-scoped replacement token, or paste the old token back into
+       that workspace variable by hand if you still hold a copy. Do not revoke
+       ${old_token_id} until a plan passes."
 fi
 
 # --- Hand back to a human ----------------------------------------------------

@@ -77,10 +77,10 @@ def legacy_rewrites(manifest: RootManifest) -> tuple[dict[str, str], ...]:
         suffix = _LEGACY_CHANNEL_SUFFIXES.get(reference.channel)
         if suffix is None:
             raise RenderError(f"no legacy path for channel {reference.channel!r}")
-        matched = _BLOB_URL.fullmatch(reference.url)
+        matched = _BLOB_URL.fullmatch(reference.ref)
         if matched is None:
             raise RenderError(
-                f"manifest index is not a blob reference: {reference.url}"
+                f"manifest index is not a blob reference: {reference.ref}"
             )
         rules.append(
             {

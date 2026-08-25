@@ -26,7 +26,7 @@ Blobs in `public/i/` are never deleted: older snapshots referenced by pinned URL
 Reproduce CI validation locally:
 
 ```text
-uv run pytest -q && uv run mypy src tests && uv run ruff check . && uv run ruff format --check .
+uv run pytest -q && uv run mypy src tests && uv run ruff check . && uv run ruff format --check . && uv run zizmor --offline .github/workflows
 ```
 
 ## Vercel configuration
@@ -34,7 +34,15 @@ uv run pytest -q && uv run mypy src tests && uv run ruff check . && uv run ruff 
 Infrastructure is declared in `infra/` (see `docs/infrastructure.md`). End-state configuration:
 
 - Bound to `gelstable/gel-registry`, production branch `main`, root directory `.`.
-- Output directory `public`, framework preset `Other`, install/build commands empty. No Functions, ISR, rewrites, or redirects.
+- Output directory `public`, framework preset `Other`, install/build commands
+  empty. No Functions, no ISR, no redirects. The only rewrites are the legacy
+  `/archive/.jsonindexes/<platform><channel>.json` aliases, one literal rule per
+  published index, which let a client configured with `GEL_PKG_ROOT` address the
+  selected snapshot through the paths it already knows.
+- `vercel.json` is rendered from the selected snapshot by
+  `gel_registry.render.hosting.hosting_config`, not hand-edited. Verify it with
+  `uv run gel-registry validate --repo .`, which fails on any drift between the
+  committed file and a fresh render.
 - Previews enabled for pull requests.
 - Deployment access via Vercel Git integration only. No deployment credentials in GitHub Actions.
 

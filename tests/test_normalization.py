@@ -21,7 +21,11 @@ from gel_registry import __main__ as cli
 from gel_registry.constants import CAPTURE_ID, ORIGIN, capture_urls
 from gel_registry.contracts import CaptureEntry, CaptureManifest, PackageIndex
 from gel_registry.digest import canonical_json, hash_bytes
-from gel_registry.normalize import NormalizationError, normalize_capture
+from gel_registry.normalize import (
+    NormalizationError,
+    _compare_trees,
+    normalize_capture,
+)
 from gel_registry.storage import read_tree
 
 CAPTURED_AT = datetime(2026, 8, 15, 12, 34, 56, tzinfo=UTC)
@@ -192,3 +196,20 @@ def test_normalize_check_reports_drift_without_touching_committed_bytes(
     assert cli.main(["normalize", "--repo", str(tmp_path), "--check"]) == 1
     assert "changed" in capsys.readouterr().err
     assert read_tree(tmp_path / "bootstrap") == drifted != before
+
+
+def test_drift_buckets_are_named_from_the_fresh_render(tmp_path: Path) -> None:
+    """``added``/``missing`` describe the candidate, which is the fresh render."""
+
+    candidate = tmp_path / "candidate"
+    existing = tmp_path / "existing"
+    candidate.mkdir()
+    existing.mkdir()
+    (candidate / "only-rendered.json").write_bytes(b"{}\n")
+    (existing / "only-committed.json").write_bytes(b"{}\n")
+
+    added, missing, changed = _compare_trees(candidate, existing)
+
+    assert added == ["only-rendered.json"]
+    assert missing == ["only-committed.json"]
+    assert changed == []

@@ -121,10 +121,10 @@ def load_pinned_snapshot(
     store = blob_store(repo)
     index_bytes: dict[str, bytes] = {}
     for reference in manifest.indexes:
-        matched = _PINNED_URL.fullmatch(reference.url)
+        matched = _PINNED_URL.fullmatch(reference.ref)
         if matched is None:
             raise RenderError(
-                f"pinned root has invalid index reference: {reference.url}"
+                f"pinned root has invalid index reference: {reference.ref}"
             )
         identity = matched.group(1)
         filename = f"{reference.channel}-{reference.platform}.json"

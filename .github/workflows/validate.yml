@@ -21,6 +21,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          # No job here uses git credentials after checkout, and the repository
+          # is public, so the later `git fetch` needs none either.
+          persist-credentials: false
 
       - name: Detect registry data
         id: registry-data
@@ -37,6 +40,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          # No job here uses git credentials after checkout, and the repository
+          # is public, so the later `git fetch` needs none either.
+          persist-credentials: false
 
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
@@ -65,6 +71,7 @@ jobs:
           uv run ruff format --check .
           uv run mypy src tests
           uv run pytest -q
+          uv run zizmor --offline .github/workflows
 
       - name: Check normalization drift
         if: needs.scope.outputs.registry_data == 'true'

@@ -54,7 +54,7 @@ def _check_blob_store(
             # An unreadable manifest is already reported by snapshot.internals.
             continue
         for item in manifest.indexes:
-            matched = _BLOB_URL.fullmatch(item.url)
+            matched = _BLOB_URL.fullmatch(item.ref)
             if matched is not None:
                 referenced.setdefault(matched.group(1), snapshot)
 
@@ -276,7 +276,7 @@ def check_pointer_and_snapshots(repo: Path, collector: Collector) -> None:
                 for item in selected_manifest.indexes
             )
             observed = tuple(
-                (item.channel, item.platform, item.url) for item in moving.indexes
+                (item.channel, item.platform, item.ref) for item in moving.indexes
             )
             if observed != expected:
                 collector.add(

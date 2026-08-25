@@ -211,8 +211,12 @@ def _compare_trees(
 ) -> tuple[list[str], list[str], list[str]]:
     candidate_paths = _tree_paths(candidate)
     existing_paths = _tree_paths(existing)
-    added = sorted(existing_paths - candidate_paths)
-    missing = sorted(candidate_paths - existing_paths)
+    # Names are from the candidate's perspective: the candidate is the fresh
+    # render, the existing tree is what is committed. A path the fresh render
+    # produces and the committed tree lacks is added; one only the committed
+    # tree has is missing from the render.
+    added = sorted(candidate_paths - existing_paths)
+    missing = sorted(existing_paths - candidate_paths)
     changed: list[str] = []
     for relative in sorted(candidate_paths & existing_paths):
         candidate_path = candidate / relative
