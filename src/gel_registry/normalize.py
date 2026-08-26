@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from .constants import CAPTURE_ID, ORIGIN
 from .contracts import CaptureManifest, PackageIndex
 from .digest import canonical_json, hash_bytes
-from .storage import rename_noreplace
+from .storage import ensure_directory_chain, rename_noreplace
 
 _PACKAGE_HOST = "packages.geldata.com"
 
@@ -199,7 +199,13 @@ def _normalize_to_stage(capture_root: Path, stage: Path) -> tuple[str, ...]:
             continue
         assert entry.path is not None
         label = f"{entry.channel}/{entry.platform}"
-        index = _normalize_index(body_snapshots[entry.path], entry.url, label)
+        # Relative installrefs resolve against the URL that actually returned
+        # the body, not the one that was requested.  Capture permits a
+        # same-origin redirect, and such a redirect can change the directory a
+        # relative reference is joined to.  ``final_url`` is required for every
+        # 200 entry, so it is always available here.
+        assert entry.final_url is not None
+        index = _normalize_index(body_snapshots[entry.path], entry.final_url, label)
         output_name = f"{entry.channel}-{entry.platform}.json"
         (stage / output_name).write_bytes(canonical_json(index))
         output_names.append(output_name)
@@ -259,7 +265,7 @@ def normalize_capture(capture_root: Path, output_root: Path) -> tuple[Path, ...]
     output_root = Path(output_root)
     try:
         parent = output_root.parent
-        parent.mkdir(parents=True, exist_ok=True)
+        ensure_directory_chain(parent)
         stage = Path(tempfile.mkdtemp(prefix=f".{output_root.name}.", dir=str(parent)))
     except (OSError, ValueError) as exc:
         raise NormalizationError(

@@ -24,6 +24,11 @@ concurrency:
 
 jobs:
   apply:
+    # `workflow_dispatch` lets an operator pick any branch, which would let an
+    # unmerged infrastructure branch reach production behind a single approval
+    # a maintainer can grant themselves. Only `main` is ever applied; the
+    # checkout below therefore always resolves to reviewed, merged config.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: production
     permissions:

@@ -188,6 +188,11 @@ def test_publication_is_idempotent_and_composes_committed_releases(
     # Composition follows the record's own artifact platforms, so a product the
     # legacy matrix never knew about still renders.
     source = ReleaseRecord.model_validate_json(release.read_bytes())
+    # Remap one platform's artifacts rather than every platform's. Collapsing
+    # the whole matrix onto a single name would hand composition five identity
+    # artifacts for one platform, which is not a shape a release record is
+    # allowed to have.
+    original = CLI_PLATFORMS[0]
     future = source.model_copy(
         update={
             "product": "future-product",
@@ -195,6 +200,7 @@ def test_publication_is_idempotent_and_composes_committed_releases(
             "artifacts": tuple(
                 artifact.model_copy(update={"platform": "future-x86_64"})
                 for artifact in source.artifacts
+                if artifact.platform == original
             ),
         }
     )

@@ -61,6 +61,14 @@ class Artifact(BaseModel):
         return self
 
 
+def artifact_name(product: str, platform: str, encoding: str) -> str:
+    """Return the canonical release asset filename for one artifact."""
+
+    suffix = ".exe" if platform.endswith("-windows-msvc") else ""
+    identity = f"{product}-{platform}{suffix}"
+    return f"{identity}.zst" if encoding == "zstd" else identity
+
+
 class ReleaseSource(BaseModel):
     """GitHub release provenance recorded with a promoted version."""
 
@@ -114,6 +122,37 @@ class ReleaseRecord(BaseModel):
     @classmethod
     def validate_promoted_time(cls, value: datetime) -> datetime:
         return validate_utc(value)
+
+    @model_validator(mode="after")
+    def validate_release_contract(self) -> ReleaseRecord:
+        """Bind every artifact to exactly one canonical release asset URL.
+
+        This lives on the contract rather than in the validator alone because
+        rendering loads release records directly.  Enforcing provenance only in
+        ``gel-registry validate`` would let ``build-snapshot`` publish an
+        install reference to arbitrary ``github.com`` content whenever the
+        validator had not been run first.
+        """
+
+        seen: set[tuple[str, str]] = set()
+        for artifact in self.artifacts:
+            key = (artifact.platform, artifact.encoding)
+            if key in seen:
+                raise ValueError(
+                    f"duplicate {artifact.encoding} artifact for {artifact.platform}"
+                )
+            seen.add(key)
+
+            name = artifact_name(self.product, artifact.platform, artifact.encoding)
+            expected = (
+                f"/{self.source.repository}/releases/download/"
+                f"{self.source.release_tag}/{name}"
+            )
+            if urlsplit(artifact.url).path != expected:
+                raise ValueError(
+                    f"artifact URL is not the allowlisted release URL: {artifact.url}"
+                )
+        return self
 
 
 def media_type_for_platform(platform: str) -> str:

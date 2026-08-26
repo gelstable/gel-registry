@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
@@ -30,14 +29,6 @@ _SCHEMA_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("root.json", RootManifest),
     ("snapshot-listing.json", SnapshotListing),
 )
-
-
-def _artifact_name(product: str, platform: str, encoding: str) -> str:
-    """Return the canonical filename derived from neutral release fields."""
-
-    suffix = ".exe" if platform.endswith("-windows-msvc") else ""
-    identity = f"{product}-{platform}{suffix}"
-    return f"{identity}.zst" if encoding == "zstd" else identity
 
 
 def load_capture(repo: Path, collector: Collector) -> CaptureManifest | None:
@@ -255,26 +246,6 @@ def check_releases(repo: Path, collector: Collector) -> None:
                 display_path(repo, path),
                 "record filename does not match its version",
             )
-        for artifact in record.artifacts:
-            name = _artifact_name(record.product, artifact.platform, artifact.encoding)
-            parsed = urlsplit(artifact.url)
-            expected_path = f"/{record.source.repository}/releases/download/"
-            expected_path += f"{record.source.release_tag}/{name}"
-            if (
-                parsed.scheme != "https"
-                or parsed.hostname != "github.com"
-                or parsed.port not in (None, 443)
-                or parsed.username is not None
-                or parsed.password is not None
-                or parsed.fragment
-                or parsed.query
-                or parsed.path != expected_path
-            ):
-                collector.add(
-                    check,
-                    display_path(repo, path),
-                    f"artifact URL is not the allowlisted release URL: {artifact.url}",
-                )
 
 
 def check_schemas(repo: Path, collector: Collector) -> None:

@@ -7,7 +7,6 @@ the canonical index bytes a snapshot is built from.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from functools import cmp_to_key
 from typing import Any
 
 from packaging.version import InvalidVersion, Version
@@ -48,7 +47,7 @@ def compose_indexes(
     for key in sorted(packages):
         values = sorted(
             (entry[1] for entry in packages[key].values()),
-            key=cmp_to_key(_compare_packages),
+            key=_package_sort_key,
         )
         rendered[key] = canonical_json(PackageIndex(packages=tuple(values)))
     return rendered
@@ -115,10 +114,14 @@ def _release_package(record: ReleaseRecord, platform: str) -> PackageEntry:
     artifacts = tuple(
         artifact for artifact in record.artifacts if artifact.platform == platform
     )
-    if {artifact.encoding for artifact in artifacts} != {"identity", "zstd"}:
+    # A set comparison only proves each encoding appears at least once.  Two
+    # identity artifacts would satisfy it, emit duplicate installrefs, and let
+    # ``next`` below pick one of them arbitrarily, so the count is checked too.
+    encodings = [artifact.encoding for artifact in artifacts]
+    if sorted(encodings) != ["identity", "zstd"]:
         raise RenderError(
-            f"release {record.version} does not have identity and zstd "
-            f"artifacts for {platform}"
+            f"release {record.version} does not have exactly one identity and "
+            f"one zstd artifact for {platform}"
         )
     references = tuple(
         InstallRef(
@@ -158,25 +161,28 @@ def _release_package(record: ReleaseRecord, platform: str) -> PackageEntry:
     )
 
 
-def _compare_packages(left: PackageEntry, right: PackageEntry) -> int:
-    if left.basename != right.basename:
-        return -1 if left.basename < right.basename else 1
+def _package_sort_key(
+    package: PackageEntry,
+) -> tuple[str, int, tuple[Version, ...], str, bytes]:
+    """Return a total ordering key for one package entry.
+
+    The legacy index carries versions PEP 440 cannot parse (``1.0-dev.6154``
+    parses, a malformed entry may not), so parsed and unparsed versions are
+    partitioned into separate ranks and never compared against each other.  A
+    comparator that fell back to a lexical branch whenever *either* side failed
+    to parse was not transitive, which made the sorted order depend on the
+    input order and put the reproducibility of the rendered bytes at risk.
+
+    The trailing version string and canonical bytes break ties so entries that
+    compare equal under PEP 440 -- ``1.0.0-alpha.1`` and ``1.0.0a1`` -- still
+    have one deterministic order.
+    """
+
     try:
-        left_version = Version(left.version)
-        right_version = Version(right.version)
+        parsed: tuple[Version, ...] = (Version(package.version),)
     except InvalidVersion:
-        if left.version != right.version:
-            return -1 if left.version < right.version else 1
-    else:
-        if left_version != right_version:
-            return -1 if left_version < right_version else 1
-    if left.version != right.version:
-        return -1 if left.version < right.version else 1
-    left_bytes = canonical_json(left)
-    right_bytes = canonical_json(right)
-    if left_bytes == right_bytes:
-        return 0
-    return -1 if left_bytes < right_bytes else 1
+        return (package.basename, 1, (), package.version, canonical_json(package))
+    return (package.basename, 0, parsed, package.version, canonical_json(package))
 
 
 def _add_package(

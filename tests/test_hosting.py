@@ -8,9 +8,7 @@ through the paths it already knows. A rewrite resolves to a file that is in the
 same uploaded tree, so it adds a name for existing bytes rather than a code
 path. Because those rewrites name a snapshot, `vercel.toml` is rendered by the
 publication transaction and checked here against the selected snapshot rather
-than hand maintained. CI decides whether a change touches registry data at all
-by looking for the data roots on disk, so that detector is part of the same
-boundary.
+than hand maintained.
 """
 
 from __future__ import annotations
@@ -33,7 +31,6 @@ from gel_registry.render.hosting import (
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 VERCEL_PATH = REPOSITORY_ROOT / "vercel.toml"
-DETECTOR = REPOSITORY_ROOT / ".github" / "scripts" / "detect-registry-data.sh"
 PRODUCTION_HOSTNAME = "registry.gelstable.com"
 STALE_HOSTNAME = "registry.gelstable.org"
 HOSTING_PATHS = ("vercel.toml", ".github", "docs")
@@ -146,30 +143,7 @@ def test_tracked_hosting_files_name_only_the_production_hostname() -> None:
         for entry in result.stdout.split(b"\0")
         if entry
     ]
-    assert DETECTOR in paths
     text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
 
     assert PRODUCTION_HOSTNAME in text
     assert STALE_HOSTNAME not in text
-
-
-@pytest.mark.parametrize(
-    "root",
-    ["upstream", "bootstrap", "releases", "pointers", "public"],
-)
-def test_the_data_detector_reports_every_registry_root(
-    tmp_path: Path, root: str
-) -> None:
-    output = tmp_path / "output"
-    environment = {**os.environ, "GITHUB_OUTPUT": str(output)}
-
-    def detect() -> str:
-        output.write_text("")
-        subprocess.run(
-            ["bash", str(DETECTOR)], cwd=tmp_path, env=environment, check=True
-        )
-        return output.read_text()
-
-    assert detect() == "present=false\n"
-    (tmp_path / root).mkdir()
-    assert detect() == "present=true\n"

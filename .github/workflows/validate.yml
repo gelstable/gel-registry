@@ -9,28 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  scope:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    outputs:
-      registry_data: ${{ steps.registry-data.outputs.present }}
-    steps:
-      - name: Check out the pull request
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
-          # No job here uses git credentials after checkout, and the repository
-          # is public, so the later `git fetch` needs none either.
-          persist-credentials: false
-
-      - name: Detect registry data
-        id: registry-data
-        run: bash .github/scripts/detect-registry-data.sh
-
   local:
-    needs: scope
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -73,12 +52,14 @@ jobs:
           uv run pytest -q
           uv run zizmor --offline .github/workflows
 
+      # These run unconditionally. They were once gated on a head-only probe
+      # for the registry directories, which meant a pull request that deleted
+      # them reported "no registry data" and skipped the append-only history
+      # check that exists to catch exactly that.
       - name: Check normalization drift
-        if: needs.scope.outputs.registry_data == 'true'
         run: uv run gel-registry normalize --repo . --check
 
       - name: Check render drift and immutable history
-        if: needs.scope.outputs.registry_data == 'true'
         run: |
           set -euo pipefail
           uv run python -c "from pathlib import Path; from gel_registry.validation import validate_local; report = validate_local(Path('.'), Path('$BASE_TREE')); print(*report.errors, sep=chr(10)); raise SystemExit(0 if report.ok else 1)"

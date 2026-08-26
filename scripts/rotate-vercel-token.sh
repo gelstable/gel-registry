@@ -70,12 +70,26 @@ fi
 IFS= read -r new_token || true
 [[ -n "$new_token" ]] || die "no token on stdin"
 
+# Credentials are passed to curl through a config file on a dedicated file
+# descriptor, never through argv. The header comment above is not decorative:
+# a command line is world-readable via `ps` and /proc/<pid>/cmdline for as long
+# as the process lives, so `--header "Authorization: Bearer $TOKEN"` would leak
+# the credential to any local user. `--config` reads the header from fd 3
+# instead, which is visible only to this process.
+#
+# stdin is left alone throughout: the PATCH below needs it for `--data @-`.
+curl_with_bearer() {
+  local token="$1"
+  shift
+  curl --config /dev/fd/3 "$@" 3<<<"header = \"Authorization: Bearer ${token}\""
+}
+
 tfe_api() {
   local method="$1" path="$2"
   shift 2
-  curl --fail --silent --show-error \
+  curl_with_bearer "$TF_API_TOKEN" \
+    --fail --silent --show-error \
     --request "$method" \
-    --header "Authorization: Bearer $TF_API_TOKEN" \
     --header "Content-Type: application/vnd.api+json" \
     "https://app.terraform.io/api/v2${path}" "$@"
 }
@@ -101,8 +115,8 @@ var_id="$(jq -r --arg k "$VAR_KEY" \
 
 echo "Verifying the new token against the Vercel API."
 
-user_json="$(curl --fail --silent --show-error \
-  --header "Authorization: Bearer $new_token" \
+user_json="$(curl_with_bearer "$new_token" \
+  --fail --silent --show-error \
   https://api.vercel.com/v2/user)" ||
   die "the new token failed authentication against Vercel"
 
@@ -124,8 +138,8 @@ team_id="${VERCEL_TEAM_ID:-$(jq -r \
        variable in HCP, or pass VERCEL_TEAM_ID. Scope is what usually goes
        wrong in a rotation, so this check is not skippable."
 
-curl --fail --silent --show-error \
-  --header "Authorization: Bearer $new_token" \
+curl_with_bearer "$new_token" \
+  --fail --silent --show-error \
   "https://api.vercel.com/v2/teams/${team_id}" >/dev/null ||
   die "the new token authenticated but cannot see team ${team_id}; its scope is wrong"
 echo "  team scope confirmed: ${team_id}"

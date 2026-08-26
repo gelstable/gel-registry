@@ -20,7 +20,9 @@ The Vercel provisioning token is stored as a sensitive workspace variable in HCP
 
 However, CI holds `TF_API_TOKEN`. While HCP prevents reading sensitive variables back via the API, any holder of `TF_API_TOKEN` can queue runs with arbitrary configurations that execute using the Vercel token.
 
-Treat a leaked `TF_API_TOKEN` as equivalent in blast radius to a leaked Vercel provisioning token.
+This is not only a concern for a leaked token. `infra-plan.yml` runs automatically on pull requests and passes `TF_API_TOKEN` to a remote plan of the *pull request's own* `infra/` configuration. A contributor with push access can therefore reach the Vercel token at plan time. Fork pull requests cannot: the workflow uses `pull_request`, not `pull_request_target`, so no secret is available to them.
+
+Treat a leaked `TF_API_TOKEN` as equivalent in blast radius to a leaked Vercel provisioning token, and treat repository push access as carrying the same weight.
 
 Scope `TF_API_TOKEN` to an HCP team token limited strictly to the `gel-registry` workspace. Never use a maintainer user token in CI.
 

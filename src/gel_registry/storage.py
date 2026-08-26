@@ -12,6 +12,7 @@ from __future__ import annotations
 import ctypes
 import errno
 import os
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -89,16 +90,38 @@ def replace_atomic(path: Path, data: bytes) -> None:
         raise
 
 
+def _holds_exactly(path: Path, data: bytes) -> bool:
+    """Report whether ``path`` is a regular file holding exactly ``data``.
+
+    ``Path.is_file()`` follows symlinks, so a symlink pointing at matching
+    bytes would otherwise be accepted as an unchanged immutable file and left
+    in a tree the rest of this module guarantees is symlink-free.  The check is
+    made with ``lstat`` so the link itself, not its target, decides.
+    """
+
+    try:
+        status = os.lstat(path)
+    except (OSError, ValueError):
+        return False
+    if not stat.S_ISREG(status.st_mode):
+        return False
+    try:
+        return path.read_bytes() == data
+    except OSError:
+        return False
+
+
 def create_atomic(path: Path, data: bytes) -> bool:
     """Create a file without replacing a raced or preexisting destination.
 
     Returns whether the file was created.  A destination that already holds
     exactly these bytes is reported as unchanged rather than as a collision, so
-    an interrupted publication can be replayed.
+    an interrupted publication can be replayed.  A symlink is never unchanged,
+    however closely its target matches.
     """
 
     if path.is_symlink() or path.exists():
-        if path.is_file() and path.read_bytes() == data:
+        if _holds_exactly(path, data):
             return False
         raise ValueError(f"immutable path collision: {path}")
     temporary = write_temp(path.parent, f".{path.name}.", data)
@@ -106,7 +129,7 @@ def create_atomic(path: Path, data: bytes) -> bool:
         rename_noreplace(temporary, path)
     except OSError as exc:
         temporary.unlink(missing_ok=True)
-        if exc.errno == errno.EEXIST and path.is_file() and path.read_bytes() == data:
+        if exc.errno == errno.EEXIST and _holds_exactly(path, data):
             return False
         raise
     return True

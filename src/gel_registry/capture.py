@@ -261,6 +261,17 @@ def _recheck_entry(
 
     try:
         if observed.status == 304 and entry.status == 200 and conditional is not None:
+            # A 304 carries no body, so the chain that served it is the only
+            # thing left to compare.  Without this the recheck would accept a
+            # redirect to a different path as confirmation of the captured
+            # bytes.
+            if observed.final_url != entry.final_url:
+                raise _entry_error(
+                    entry.channel,
+                    entry.platform,
+                    f"expected final URL {entry.final_url}, "
+                    f"observed {observed.final_url}",
+                )
             return
         if observed.status != entry.status:
             raise _entry_error(
@@ -303,7 +314,10 @@ def capture_legacy(
         raise CaptureError(f"capture destination already exists: {destination}")
 
     parent = destination.parent
-    parent.mkdir(parents=True, exist_ok=True)
+    try:
+        storage.ensure_directory_chain(parent)
+    except (OSError, ValueError) as exc:
+        raise CaptureError(f"capture destination is not usable: {exc}") from exc
     temporary_root = Path(
         tempfile.mkdtemp(prefix=f".{destination.name}.", dir=str(parent))
     )
