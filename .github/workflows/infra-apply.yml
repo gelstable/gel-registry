@@ -42,6 +42,9 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@33c9ab3ef95cd57c164d9d6eb1f9a46338538d41
 
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d
+
       - name: Initialize
         env:
           TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
