@@ -1,0 +1,126 @@
+{
+  "packages": [
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "2025-02-20T00:22:45.839269+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/edgedb-cli-6.2.0-dev.1270+0ad7a98.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/edgedb-cli-6.2.0-dev.1270+0ad7a98.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "997cb0b3036f985c4c5928c7b8127d7d44a6ccb42d4ed4d9a9789d49d4d0be8ac9dc2ec95daed5e55af88c61430914bd8a9847fa4305aec933291120571c37f2",
+            "sha256": "f83a7d67898ad3a79fe2c4b989ad6d73b54926437b528ae3983ae46819e7588c",
+            "size": 24035328
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/edgedb-cli-6.2.0-dev.1270+0ad7a98.exe.gz",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "84c224a3525641b03a615a6b25b3aa86ce41bc9a77f50253467e6a8ffd24a1a2f7c9e6b70a4fd8ff8bb0793d449508d397f8767cb2f8fb6b960eefce5e834408",
+            "sha256": "8a20efdbf5998db2e9920493cbab6b3c10558693dee7fd3182a494c2ac754ea0",
+            "size": 8783910
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/edgedb-cli-6.2.0-dev.1270+0ad7a98.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "b698c6e09dddbff757ab2c5ae309d7295d3c78fa9483cdd88b2c9c70265805edd131683eb17132b4d9267adb04be4a2896c83d9992364741e639655aa31f52ab",
+            "sha256": "4ca73b05583c3626299f379b3535c6c1a5e6c9d4b6eec6c9bc621402be9e4d81",
+            "size": 6518069
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202502200021",
+      "slot": "",
+      "tags": {},
+      "version": "6.2.0-dev.1270+0ad7a98",
+      "version_details": {
+        "major": 6,
+        "metadata": {
+          "build_hash": "0ad7a98",
+          "build_revision": "202502200021",
+          "scm_revision": "518ede78f",
+          "source_date": "2025021908"
+        },
+        "minor": 2,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 1270,
+            "phase": "dev"
+          }
+        ]
+      },
+      "version_key": "6.2.0~dev.1270.202502200021"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "gel-cli",
+      "build_date": "2025-11-23T00:27:57.583868+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+fab4b92.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+fab4b92.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "8f7a0f85223c42b15156b164d8f5fd0722a868213977fe6d4e2ee9430ced6905dfa80438560b88c4193f0d2f0bf4575303801cccad57b8edbca9987dcad8f376",
+            "sha256": "16d93e3ae5d01ce0656b7d788184fd422c83bf7080c47917b6297cfe81e4c821",
+            "size": 28972032
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+fab4b92.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "1f1416880f5481484b54adcc9d7cc92b48d3ad180499c55bc1de3dfa6471b47631e275312a4450f0ca3769e455be1ee53a0e09fd52ef5b247de00c23a552b635",
+            "sha256": "01cc75b589fbabe1fca837c850048613a25b88fa1cd1297e8a450a41d69d8a8a",
+            "size": 10649004
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.nightly/gel-cli-7.10.2-dev.1474+fab4b92.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "746e9f26233ca7af7b593a42b1b84b0b4c8cd61b715048aa543fea64d026d5185fed633d06a1dfcaec8254e4b964ad2120b1421f0296d4812cfc70ad61530d99",
+            "sha256": "f38e35018bcf5c37520130446e215a398e4038350abd6c26787b66b3d76aa2ee",
+            "size": 8051037
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202511230026",
+      "slot": "",
+      "tags": {},
+      "version": "7.10.2-dev.1474+fab4b92",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "fab4b92",
+          "build_revision": "202511230026",
+          "scm_revision": "7c602f7c1",
+          "source_date": "2025112200"
+        },
+        "minor": 10,
+        "patch": 2,
+        "prerelease": [
+          {
+            "number": 1474,
+            "phase": "dev"
+          }
+        ]
+      },
+      "version_key": "7.10.2~dev.1474.202511230026"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "description": "The sole mutable source pointer selecting a published snapshot.",
+  "properties": {
+    "snapshot": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Snapshot",
+      "type": "string"
+    }
+  },
+  "required": [
+    "snapshot"
+  ],
+  "title": "Pointer",
+  "type": "object"
+}

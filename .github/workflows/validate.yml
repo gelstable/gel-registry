@@ -1,0 +1,65 @@
+name: Registry validation
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  local:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          # No job here uses git credentials after checkout, and the repository
+          # is public, so the later `git fetch` needs none either.
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.6"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Materialize the merge base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          base="$(git merge-base HEAD "refs/remotes/origin/$BASE_REF")"
+          tree="$RUNNER_TEMP/gel-registry-merge-base"
+          mkdir -p "$tree"
+          git archive "$base" | tar -x -C "$tree"
+          echo "BASE_TREE=$tree" >> "$GITHUB_ENV"
+
+      - name: Run locked static checks and tests
+        run: |
+          set -euo pipefail
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy src tests
+          uv run pytest -q
+          uv run zizmor --offline .github/workflows
+
+      # These run unconditionally. They were once gated on a head-only probe
+      # for the registry directories, which meant a pull request that deleted
+      # them reported "no registry data" and skipped the append-only history
+      # check that exists to catch exactly that.
+      - name: Check normalization drift
+        run: uv run gel-registry normalize --repo . --check
+
+      - name: Check render drift and immutable history
+        run: |
+          set -euo pipefail
+          uv run python -c "from pathlib import Path; from gel_registry.validation import validate_local; report = validate_local(Path('.'), Path('$BASE_TREE')); print(*report.errors, sep=chr(10)); raise SystemExit(0 if report.ok else 1)"

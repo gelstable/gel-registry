@@ -1,0 +1,53 @@
+name: Infrastructure apply
+
+# Applies the merged configuration. The `production` environment carries
+# required reviewers, so merging alone does not apply: a maintainer approves
+# the deployment before this job proceeds.
+"on":
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra-apply.yml"
+      - "flake.nix"
+      - "flake.lock"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Never run two applies against the same state at once. Do not cancel one in
+# progress; a cancelled apply can leave state and reality out of step.
+concurrency:
+  group: infra-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    # `workflow_dispatch` lets an operator pick any branch, which would let an
+    # unmerged infrastructure branch reach production behind a single approval
+    # a maintainer can grant themselves. Only `main` is ever applied; the
+    # checkout below therefore always resolves to reviewed, merged config.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the merged commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@33c9ab3ef95cd57c164d9d6eb1f9a46338538d41
+
+      - name: Initialize
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+        run: nix develop --command terraform -chdir=infra init -input=false
+
+      - name: Apply
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+        run: nix develop --command terraform -chdir=infra apply -input=false -auto-approve

@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# Rotate the Vercel provisioning token held as a workspace variable in HCP
+# Terraform.
+#
+# This script is the scripted middle of a three-step procedure. It cannot mint
+# or revoke a Vercel token; Vercel exposes neither operation at the scope this
+# credential needs. See docs/secrets.md for the full procedure.
+#
+#   Step 1 (human)   Create the replacement token in the Vercel dashboard and
+#                    record the OLD token's identifier.
+#   Step 2 (this)    Verify, install, and prove the new token.
+#   Step 3 (human)   Revoke the old token by the recorded identifier.
+#
+# The old token stays valid throughout. Nothing here revokes anything.
+#
+# Usage:
+#   scripts/rotate-vercel-token.sh --old-token-id <id> < new-token.txt
+#   pbpaste | scripts/rotate-vercel-token.sh --old-token-id <id>
+#
+# The new token is read from stdin. Never pass a credential as an argument:
+# argv is visible in `ps` and lands in shell history.
+
+set -euo pipefail
+
+ORG="${TF_CLOUD_ORGANIZATION:-gelstable}"
+WORKSPACE="${TF_WORKSPACE:-gel-registry}"
+VAR_KEY="vercel_api_token"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+die() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+old_token_id=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --old-token-id)
+      # `shift 2` with no value would exit silently under `set -e`, which makes
+      # a typo look like an unexplained failure.
+      [[ $# -ge 2 ]] || die "--old-token-id requires a value"
+      old_token_id="$2"
+      shift 2
+      ;;
+    -h | --help)
+      sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+for cmd in curl jq terraform; do
+  command -v "$cmd" >/dev/null || die "$cmd not found; run inside 'nix develop'"
+done
+
+[[ -n "$old_token_id" ]] ||
+  die "--old-token-id is required. Record it from the Vercel dashboard before
+       creating the replacement; two tokens with adjacent creation dates are
+       hard to tell apart afterwards."
+
+: "${TF_API_TOKEN:?TF_API_TOKEN is required to update the HCP workspace variable}"
+
+if [[ -t 0 ]]; then
+  die "the new Vercel token is read from stdin, not from a terminal"
+fi
+IFS= read -r new_token || true
+[[ -n "$new_token" ]] || die "no token on stdin"
+
+# Credentials are passed to curl through a config file on a dedicated file
+# descriptor, never through argv. The header comment above is not decorative:
+# a command line is world-readable via `ps` and /proc/<pid>/cmdline for as long
+# as the process lives, so `--header "Authorization: Bearer $TOKEN"` would leak
+# the credential to any local user. `--config` reads the header from fd 3
+# instead, which is visible only to this process.
+#
+# stdin is left alone throughout: the PATCH below needs it for `--data @-`.
+curl_with_bearer() {
+  local token="$1"
+  shift
+  curl --config /dev/fd/3 "$@" 3<<<"header = \"Authorization: Bearer ${token}\""
+}
+
+tfe_api() {
+  local method="$1" path="$2"
+  shift 2
+  curl_with_bearer "$TF_API_TOKEN" \
+    --fail --silent --show-error \
+    --request "$method" \
+    --header "Content-Type: application/vnd.api+json" \
+    "https://app.terraform.io/api/v2${path}" "$@"
+}
+
+# --- Resolve the workspace before touching anything --------------------------
+# The lookup has to happen first: the team the configuration targets is an HCP
+# workspace variable, and the scope check below needs it.
+
+echo "Locating the HCP workspace ${ORG}/${WORKSPACE}."
+workspace_id="$(tfe_api GET "/organizations/${ORG}/workspaces/${WORKSPACE}" |
+  jq -r '.data.id')"
+[[ -n "$workspace_id" && "$workspace_id" != "null" ]] ||
+  die "could not resolve workspace ${ORG}/${WORKSPACE}"
+
+workspace_vars="$(tfe_api GET "/workspaces/${workspace_id}/vars")"
+
+var_id="$(jq -r --arg k "$VAR_KEY" \
+  '.data[] | select(.attributes.key == $k) | .id' <<<"$workspace_vars")"
+[[ -n "$var_id" ]] ||
+  die "workspace variable ${VAR_KEY} not found; create it in HCP first"
+
+# --- Verify the token before writing it anywhere -----------------------------
+
+echo "Verifying the new token against the Vercel API."
+
+user_json="$(curl_with_bearer "$new_token" \
+  --fail --silent --show-error \
+  https://api.vercel.com/v2/user)" ||
+  die "the new token failed authentication against Vercel"
+
+echo "  authenticated as: $(jq -r '.user.username // .user.email // "unknown"' <<<"$user_json")"
+
+# Scope, not the token value, is what usually goes wrong. Confirm the token can
+# actually see the team the configuration targets.
+#
+# The value comes from the HCP workspace, not from `terraform console`: the
+# working tree defaults `var.vercel_team_id` to null, so a local lookup would
+# resolve to nothing and silently skip the one check that matters. This
+# variable is not sensitive, so the API returns its value.
+team_id="${VERCEL_TEAM_ID:-$(jq -r \
+  '.data[] | select(.attributes.key == "vercel_team_id") | .attributes.value // ""' \
+  <<<"$workspace_vars")}"
+
+[[ -n "$team_id" && "$team_id" != "null" ]] ||
+  die "could not resolve the target team. Set the vercel_team_id workspace
+       variable in HCP, or pass VERCEL_TEAM_ID. Scope is what usually goes
+       wrong in a rotation, so this check is not skippable."
+
+curl_with_bearer "$new_token" \
+  --fail --silent --show-error \
+  "https://api.vercel.com/v2/teams/${team_id}" >/dev/null ||
+  die "the new token authenticated but cannot see team ${team_id}; its scope is wrong"
+echo "  team scope confirmed: ${team_id}"
+
+# --- Install it as the workspace variable ------------------------------------
+
+echo "Updating workspace variable ${VAR_KEY}."
+jq -n --arg id "$var_id" --arg value "$new_token" \
+  '{data: {id: $id, type: "vars", attributes: {value: $value, sensitive: true}}}' |
+  tfe_api PATCH "/workspaces/${workspace_id}/vars/${var_id}" --data @- >/dev/null
+
+# --- Prove it ----------------------------------------------------------------
+# The plan, not the API call above, is what proves the token is sufficient.
+
+echo "Running a plan with the new token."
+terraform -chdir="$REPO_ROOT/infra" init -input=false >/dev/null
+if ! terraform -chdir="$REPO_ROOT/infra" plan -input=false -no-color; then
+  die "the plan failed with the new token, which is now the value of the
+       ${VAR_KEY} workspace variable in ${ORG}/${WORKSPACE}. The old token is
+       still live and has not been revoked, but its value was not captured and
+       HCP will not return it. To recover: re-run this script with a
+       correctly-scoped replacement token, or paste the old token back into
+       that workspace variable by hand if you still hold a copy. Do not revoke
+       ${old_token_id} until a plan passes."
+fi
+
+# --- Hand back to a human ----------------------------------------------------
+# This script must not exit quietly. Its last output is a revocation
+# instruction, and a lost instruction turns a rotation into a second live
+# credential.
+
+cat <<EOF
+
+================================================================================
+ROTATION INCOMPLETE. One manual step remains.
+
+The new token is installed and a plan has succeeded with it. The old token is
+still valid and must be revoked by hand.
+
+  Revoke token:  ${old_token_id}
+  Dashboard:     https://vercel.com/account/tokens
+
+Do this after the change has been merged and a CI apply has succeeded. Confirm
+the token is gone rather than assuming, then resolve the revocation note on the
+pull request.
+
+An open revocation note is an incomplete rotation.
+================================================================================
+EOF

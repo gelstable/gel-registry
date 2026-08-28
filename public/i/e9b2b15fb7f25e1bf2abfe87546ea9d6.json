@@ -1,0 +1,707 @@
+{
+  "packages": [
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-2.3.0-alpha.1+b0d8f81.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-2.3.0-alpha.1+b0d8f81.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "56a38afc8bed8a01ec400c11bb90e14ae14790cfa7267888491c7341d4f691a6d32ba69bd302fc71b72e6fcc98af1d16d7519615e77896aa81dda08cf222f760",
+            "sha256": "a7a5cbbc22a83beb5ec8083eaa0637a15583257ca87db95d9c2f5f06067abef9",
+            "size": 14404608
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-2.3.0-alpha.1+b0d8f81.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "dfb76da85e9060ad5c6224a73839d19da8de9108c867156f81840a07bd07fd8aff5eb8cb3b60aa73cea83dd889437705bfdc4a7d306882eaadd3bb7cd5372d65",
+            "sha256": "f239656de4f5b4039bc28cc426569c48b100bd0bde701f8ecc275adca67768da",
+            "size": 4251457
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202211200118",
+      "slot": "",
+      "tags": {},
+      "version": "2.3.0-alpha.1+b0d8f81",
+      "version_details": {
+        "major": 2,
+        "metadata": {
+          "build_hash": "b0d8f81",
+          "build_revision": "202211200118",
+          "scm_revision": "e80aa7887",
+          "source_date": "2022112001"
+        },
+        "minor": 3,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 1,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "2.3.0~alpha.1.202211200118"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.2+307e902.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.2+307e902.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "63d765ea97041690aa6265802eb3163cd9cc7b11a26c06e9705e12cae35f1759571c450616881b7ab478040a4ed1ca5b33463f9a66eb5144c1daaaffbaf878c5",
+            "sha256": "445b0b58a6b4ccc3d81776963c5314b027b56034ab1f1c5d5f66540310a6fba6",
+            "size": 14451200
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.2+307e902.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "1d6d79cd71703d9daafd810b385a15a237ed34ca75993979bdec716be3f70b2b8f54a1df84121be42efa6eee2b1766dc4f821803bf00bba3fc3c151027818c35",
+            "sha256": "05979beaf1af69325e4603956a9625b6307075368fd79e4ec06828a0200879dd",
+            "size": 4389151
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202303091225",
+      "slot": "",
+      "tags": {},
+      "version": "3.0.0-alpha.2+307e902",
+      "version_details": {
+        "major": 3,
+        "metadata": {
+          "build_hash": "307e902",
+          "build_revision": "202303091225",
+          "scm_revision": "72a3639e3",
+          "source_date": "2023030912"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 2,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "3.0.0~alpha.2.202303091225"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.2+ac759d1.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.2+ac759d1.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "4ed6c0a06073a850e4b3a2d1ec12553746c91e0e04f81a04cc46128458dc666ed10e1b2ac9ed2f94760b85fc26dfa25487f2730da260a19d87174c9eec7652c6",
+            "sha256": "d1b285f4cf483428bc65479b91e8ae878a6c559074b1c9e180d7ee4b493d0ab9",
+            "size": 16806400
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.2+ac759d1.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "cb936f0778d03af43bc8bed972651fc1267a4cc05ddaf9e0131b586e5f781a76d0ed90e7cf7ca2ad790e067e08827ef85159f4c867fe7e28486bf24cbaf858f2",
+            "sha256": "a2fe857b3588c9c9938bc7f7a0bd92f6119edbf9359c1553f2a623a247afd866",
+            "size": 4803194
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202303122120",
+      "slot": "",
+      "tags": {},
+      "version": "3.0.0-alpha.2+ac759d1",
+      "version_details": {
+        "major": 3,
+        "metadata": {
+          "build_hash": "ac759d1",
+          "build_revision": "202303122120",
+          "scm_revision": "7b7deb7eb",
+          "source_date": "2023031221"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 2,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "3.0.0~alpha.2.202303122120"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.4+35f6c3d.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.4+35f6c3d.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "0f90c31005cc7aa9dedbab0b6f8c63e4439f0620da46927d479af1364d7ab6f4ba9556eb7fe3a007e6dc97a751a13d5219e0caad1194414f0b726db78d1a47e2",
+            "sha256": "27b62433e80ea2ecfd9daaabbb73bc8522b81b379998f659f9ff622748d01338",
+            "size": 16796672
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.4+35f6c3d.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "878dcbe5141eca0f95fc7122759e0db1aeb5567533abb1f7f75c926b69b3ae8a2e181069f96db9b16f490e201aefc96b1ad6635a4a8541cb9a1967e0a1734861",
+            "sha256": "8dede592fbe45ec7307c10cc24588233cb89a66e4c3ad0e8eb7087526aa0995f",
+            "size": 4799791
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202303122209",
+      "slot": "",
+      "tags": {},
+      "version": "3.0.0-alpha.4+35f6c3d",
+      "version_details": {
+        "major": 3,
+        "metadata": {
+          "build_hash": "35f6c3d",
+          "build_revision": "202303122209",
+          "scm_revision": "b280d0ead",
+          "source_date": "2023031222"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 4,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "3.0.0~alpha.4.202303122209"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.5+c2b6798.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.5+c2b6798.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "0ea9d9e11289e179fb8a44d95259a4dd06f109a9f6a02d75ed71387cb1669d0e4c2bd921d5f01af1261cb2203547e819e5ed3f2d2af4786c0f4528187fbf9270",
+            "sha256": "5914fa7b8f58c16ea64c00de7cc98b913efbef65b279812eeb79ea2d66fc761a",
+            "size": 16820224
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.5+c2b6798.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "6dfe2d25848b6d338e57e154a8f8ebee23869526deca77d538dd70265e83b0819e20ddd906649dc312480e82e26f39e50af2370e905e8578e4bf38b9d43f388c",
+            "sha256": "f6e0867576ebe712ab20e1a91bb62b9c8a1b6b319aa12dd4a91de515912d186b",
+            "size": 4811351
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202303131756",
+      "slot": "",
+      "tags": {},
+      "version": "3.0.0-alpha.5+c2b6798",
+      "version_details": {
+        "major": 3,
+        "metadata": {
+          "build_hash": "c2b6798",
+          "build_revision": "202303131756",
+          "scm_revision": "a865820bf",
+          "source_date": "2023031317"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 5,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "3.0.0~alpha.5.202303131756"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.6+697fb4b.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.6+697fb4b.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "65bc84e0a57626024458d57ed5f46ee1fc158b4ce4b9f5b911cd0ef81c60f1d2068e7d0456a3f3c5abf09172cc5646a1c23ec5c5c10b1649ab6eac04153097a4",
+            "sha256": "a3da8fb209a994ce806dac5cda15bce1397d0c4a64469194d1862f1fb07295a7",
+            "size": 18203136
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-alpha.6+697fb4b.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "48c70455885bae238a755c8482c8ac826d75bbda43e837e7d56f4948bc6e52027bb9c34ab736f107e7636d56d2cdeae40a95ccb06e91235ca2f489115b8655a5",
+            "sha256": "061b847a380bb4123bb25cb5f790ff4a003e76745c1e1d27fa3db67226c4777c",
+            "size": 5170188
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202304251056",
+      "slot": "",
+      "tags": {},
+      "version": "3.0.0-alpha.6+697fb4b",
+      "version_details": {
+        "major": 3,
+        "metadata": {
+          "build_hash": "697fb4b",
+          "build_revision": "202304251056",
+          "scm_revision": "b80c409fe",
+          "source_date": "2023042510"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 6,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "3.0.0~alpha.6.202304251056"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-beta.1+487c517.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-beta.1+487c517.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "40192fbce5deb0d27a8d915d5e2601f4be019f8246c6b4003466fc57d145251275ba0f1974b4f51fd3bb0bf2fcd2838e71dad5a59b362809b56f86b336ef4fac",
+            "sha256": "1930dd9f49ecfcaafe2fedb9080e3c41248b8dac2c4cb5a98eb5c3b971d3687c",
+            "size": 18393088
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-beta.1+487c517.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "91b8988404550a43e53c477363b50de76cadc62ad62ff8f6c2972a66c9085a80f76c18142eaba48d38ad6804c0a713d1f3efb9673b339cb684622276d1a96b48",
+            "sha256": "55625bde98abac66c1182b1ccd934e47e5c080f22ba2a606978f4229afbab108",
+            "size": 5231495
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202305060014",
+      "slot": "",
+      "tags": {},
+      "version": "3.0.0-beta.1+487c517",
+      "version_details": {
+        "major": 3,
+        "metadata": {
+          "build_hash": "487c517",
+          "build_revision": "202305060014",
+          "scm_revision": "c20fd21d0",
+          "source_date": "2023050600"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 1,
+            "phase": "beta"
+          }
+        ]
+      },
+      "version_key": "3.0.0~beta.1.202305060014"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-beta.2+2ce3d4c.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-beta.2+2ce3d4c.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "9ed1e8aefab33f836ea8570e6442aaaa6130304a195839487b1121d1946c964a328ff8d92a6237a012660f86d5d8f97f3dc74e5e24d177742164b7f46e282ab9",
+            "sha256": "11af02458d76dba10f01ada49067ba6c01d1a0fbfe3e44cbfe37b48f6e65b705",
+            "size": 18514944
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-3.0.0-beta.2+2ce3d4c.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "249cc0ce2e627eb496b8c10243bdd715bbb183d524de5febfd5534bc6a35d0fc66dd3b8ce84bfe79c327c8a91439ffeea060db1529eb2eae42edc610586f15c4",
+            "sha256": "d3c9bba5a2f29fde27a4a44f06db4f2e11869b0477bfb4c4cda61296a3800d34",
+            "size": 5240917
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202305170152",
+      "slot": "",
+      "tags": {},
+      "version": "3.0.0-beta.2+2ce3d4c",
+      "version_details": {
+        "major": 3,
+        "metadata": {
+          "build_hash": "2ce3d4c",
+          "build_revision": "202305170152",
+          "scm_revision": "007155c09",
+          "source_date": "2023051701"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 2,
+            "phase": "beta"
+          }
+        ]
+      },
+      "version_key": "3.0.0~beta.2.202305170152"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "1970-01-01T00:00:00+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-4.0.0-alpha.1+dce7814.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-4.0.0-alpha.1+dce7814.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "5d275846248e2039b0a5d5ef363707b497505025fdf37bedcba7b2b5afc4530e1bc50a8c425cabc15f4ce424db3e5f4fc6e452d01a55b9a75a30419cc21f2ef4",
+            "sha256": "10a9f47da4bee789fc77c31dd5c0dda37f65db250965e526696f1c4387db9324",
+            "size": 19133440
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-4.0.0-alpha.1+dce7814.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "5dd2625acbe4f937e49328b68889e984936d5a5e5916169fe0e3a7c6ac1d1eb043b73179be73b67dc5250adaae2ad2461c7b3ca62b366355a698b4bbf292e645",
+            "sha256": "996b4ce60580dda9c0434bf4e1671949e1cc2b226acecae4096b0e99fbc43fef",
+            "size": 5253614
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202309131105",
+      "slot": "",
+      "tags": {},
+      "version": "4.0.0-alpha.1+dce7814",
+      "version_details": {
+        "major": 4,
+        "metadata": {
+          "build_hash": "dce7814",
+          "build_revision": "202309131105",
+          "scm_revision": "947552f75",
+          "source_date": "2023091310"
+        },
+        "minor": 0,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 1,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "4.0.0~alpha.1.202309131105"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "edgedb-cli",
+      "build_date": "2025-02-20T17:50:54.516009+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-6.2.0-alpha.1+59c6a26.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-6.2.0-alpha.1+59c6a26.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "8a1cf1b5113f302e41199583d220999c3e47aea674dfde121268de940ac4d8ed2997f8748eb5411500abe28f9522f62f3a812388b157a2288d2f72bb48eea89b",
+            "sha256": "bddf68713d4902aa5e94d755f7737415717cb8692ccc97bff12ee9d965bd7279",
+            "size": 24013312
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-6.2.0-alpha.1+59c6a26.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "9d00413edbb6fe1e61ce12603620c0e3d7dda196944c9f8e5f8cc00f7ca13b2e3eeb62b4a39a8a7fcae49a8a8be42c56e9ec04f3d62e6a34a0e6726882b042e0",
+            "sha256": "ad3c4ce18767b7692907bed334aefd37a168db7db5982a87bb158a57a75f83a7",
+            "size": 6541789
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/edgedb-cli-6.2.0-alpha.1+59c6a26.exe.gz",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "48c0c844bbf21a10445387fb4d9f7aac6d6d29de5ba46914d06e9b9b72bb04b641f0ac1494226a25d2737ed588c047197d066218bce45072c8abc9053eb650c1",
+            "sha256": "cf8ef2beba95792aa3534c64538973edc4f077fff3832ebd42a6e13f6ac15119",
+            "size": 8821025
+          }
+        }
+      ],
+      "name": "edgedb-cli",
+      "revision": "202502201749",
+      "slot": "",
+      "tags": {},
+      "version": "6.2.0-alpha.1+59c6a26",
+      "version_details": {
+        "major": 6,
+        "metadata": {
+          "build_hash": "59c6a26",
+          "build_revision": "202502201749",
+          "scm_revision": "b142cd1c3",
+          "source_date": "2025022017"
+        },
+        "minor": 2,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 1,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "6.2.0~alpha.1.202502201749"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "gel-cli",
+      "build_date": "2025-02-20T19:38:12.469519+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.2+52f1d62.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.2+52f1d62.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "968c3394e6495b048066a322c97300ff87c517af59adb846716fa322afb016098c2bf9e611b119e93ea7c49163da7cea243f9da7be9b1fd63562bf6b1a67be24",
+            "sha256": "99f48f1b7f7bf52f12e4b272bb085e198c84b1588ccb217e37d2e9494a9267c4",
+            "size": 24006144
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.2+52f1d62.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "f5cc62aaf61e113c2c964d3ac47c78bbbba9152af9611274d42853e1045b9bbd54cd622d32f14ca33810935105d8a66566b2715d55cbce32e62d43c2fc236946",
+            "sha256": "5e7905ccee7e4f205916ff9044c44691e2da09def5ffb05689dba924fa3e5cac",
+            "size": 6545169
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.2+52f1d62.exe.gz",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "bf700b6691384e07e70acb35fe97eda24b1649a98bd778381360582076a896164e9cde5b27fe34b7a9f29bfbc9311fba402598f3fbd62e60498f414d82da3c19",
+            "sha256": "fdec3ab219df842c466f045161b2ee589ecaf0b12cd91ea438d3829bfd44ecd3",
+            "size": 8808875
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202502201937",
+      "slot": "",
+      "tags": {},
+      "version": "6.2.0-alpha.2+52f1d62",
+      "version_details": {
+        "major": 6,
+        "metadata": {
+          "build_hash": "52f1d62",
+          "build_revision": "202502201937",
+          "scm_revision": "628326733",
+          "source_date": "2025022019"
+        },
+        "minor": 2,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 2,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "6.2.0~alpha.2.202502201937"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "gel-cli",
+      "build_date": "2025-02-21T02:23:03.189923+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.3+07438ea.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.3+07438ea.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "638404423c697660d1afe6328d95d775fee9cf9e86fd088577f8242a29d0f0786cf98e96c2222937e991d5a1f4ef0a4729e33c834f897b0832a3af22a8937c2d",
+            "sha256": "93d4b90f72890d10b88e4a0048f7d349cf8815bacd33f0bc7ff022d24a931da2",
+            "size": 24037376
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.3+07438ea.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "73371f2f96da928741fe6c339b44b7b91116567bd13e227fa95e43bd4eccdd7ee3e51b326f1a29aa4725fa76de55da3d9a8e1a3ccd407469bf59457635bb9de4",
+            "sha256": "652587da893bc520483a02d625b7bba9f474d00a26d40592d43732662a2b1239",
+            "size": 6548030
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-6.2.0-alpha.3+07438ea.exe.gz",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "510caf592bd435f9e66ce02a2304dbd763afd22917390d2ef2662e1ba6b443cedad0038b050e2ed716329c8d1a35d5c8eceeab7f3ebd0f3edaf94e08794e52fd",
+            "sha256": "d54438fc1a442c0b66a2f2f2fdda37ca954db5f1c799d1a90363b645f88cd184",
+            "size": 8816994
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202502210222",
+      "slot": "",
+      "tags": {},
+      "version": "6.2.0-alpha.3+07438ea",
+      "version_details": {
+        "major": 6,
+        "metadata": {
+          "build_hash": "07438ea",
+          "build_revision": "202502210222",
+          "scm_revision": "9b9f29d73",
+          "source_date": "2025022100"
+        },
+        "minor": 2,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 3,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "6.2.0~alpha.3.202502210222"
+    },
+    {
+      "architecture": "x86_64",
+      "basename": "gel-cli",
+      "build_date": "2025-02-25T01:50:12.852575+00:00",
+      "installref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-7.1.0-alpha.1+6f6a2e1.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-7.1.0-alpha.1+6f6a2e1.exe",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "c82a342edf63f757c5b5ec2709b3ed80be05f23abbd60f06ed1073c43fe3c0dfb74bc26c8c649d7ec85fb1566036f04050d1ed1286f5ad633916599afed209bd",
+            "sha256": "d63c988b2c5e772452ae4a7a6ba709548cd163de27c398daa336034d747ad4c7",
+            "size": 23913984
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-7.1.0-alpha.1+6f6a2e1.exe.zst",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "919e1b7029bc110fc183746fc06dca83ef7b21b20c306e3ab72813cdbfd1a80dddaca133e231b46f1a7417b8ad4bf012444f73340181909e6025f3c2911c292a",
+            "sha256": "8f8bfa1f96fdc809883f0ca0f8df7a657ed0e1f41a5128163b973dfab9add9ff",
+            "size": 6516385
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/x86_64-pc-windows-msvc.testing/gel-cli-7.1.0-alpha.1+6f6a2e1.exe.gz",
+          "type": "application/x-dosexec",
+          "verification": {
+            "blake2b": "3c6456ba115edf56670804539728a1337717159fbd1b3df6c2aab9f74e12c9a1943bb728612d0df43a76dc73f9e31e7c39adb7f62d20a32c5b8dae3eeffb44ee",
+            "sha256": "0ee426efd7e908fc9c90cf49a6c9201edb73f7b52a429b8c47e2e0fb13fe8039",
+            "size": 8782265
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202502250149",
+      "slot": "",
+      "tags": {},
+      "version": "7.1.0-alpha.1+6f6a2e1",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "6f6a2e1",
+          "build_revision": "202502250149",
+          "scm_revision": "c5d1f38c3",
+          "source_date": "2025022501"
+        },
+        "minor": 1,
+        "patch": 0,
+        "prerelease": [
+          {
+            "number": 1,
+            "phase": "alpha"
+          }
+        ]
+      },
+      "version_key": "7.1.0~alpha.1.202502250149"
+    }
+  ]
+}

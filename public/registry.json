@@ -1,0 +1,120 @@
+{
+  "indexes": [
+    {
+      "channel": "stable",
+      "platform": "x86_64-unknown-linux-gnu",
+      "ref": "i/fe1816b4c42ef81352eedd31df97c99d.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "x86_64-unknown-linux-musl",
+      "ref": "i/0f0047aca09d3c32c4165fa2355f9f4e.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-unknown-linux-gnu",
+      "ref": "i/7c4201a101073a36aa18b4b7e1e59f27.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-unknown-linux-musl",
+      "ref": "i/efe593ed85fe0c5a9d651c5eae6fb4f3.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "x86_64-apple-darwin",
+      "ref": "i/d7e96837e96caba6adc7d04749109845.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-apple-darwin",
+      "ref": "i/f294f0ae6a325c1e70d58c2a6b3de1d7.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "x86_64-pc-windows-msvc",
+      "ref": "i/039df4462e84848e7634b7f26bbcc99f.json"
+    },
+    {
+      "channel": "stable",
+      "platform": "aarch64-pc-windows-msvc",
+      "ref": "i/ef7b13e0d244f07b28e60d784cb38933.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-unknown-linux-gnu",
+      "ref": "i/e4b0249ef45f8eaba1a1690277df9be6.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-unknown-linux-musl",
+      "ref": "i/cfbf6846e75721f1c19f80b8494652fc.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "aarch64-unknown-linux-gnu",
+      "ref": "i/56042742fe6e3de0c9d5d33123daa4de.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "aarch64-unknown-linux-musl",
+      "ref": "i/e41828eccb78e1c31540a5dce226eb1d.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-apple-darwin",
+      "ref": "i/476daa87d2bb525d957d8ba4d9d9df25.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "aarch64-apple-darwin",
+      "ref": "i/7f3ce8ecfbf4993046add5e140a71b43.json"
+    },
+    {
+      "channel": "testing",
+      "platform": "x86_64-pc-windows-msvc",
+      "ref": "i/e9b2b15fb7f25e1bf2abfe87546ea9d6.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-unknown-linux-gnu",
+      "ref": "i/94606b80cbd87107f69154d75aae3ee4.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-unknown-linux-musl",
+      "ref": "i/831b2e1f8a8a898286e3b4ca52457ee6.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-unknown-linux-gnu",
+      "ref": "i/062275b073ccb9928b17b5e705eb1911.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-unknown-linux-musl",
+      "ref": "i/43edc1e6a0ad22593d9535aacd098226.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-apple-darwin",
+      "ref": "i/80b07c239f3d2a75cb76b8132cb0b7b9.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-apple-darwin",
+      "ref": "i/44004d0d69e73ceb73a98dc9bc61bcfe.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "x86_64-pc-windows-msvc",
+      "ref": "i/cdfc57544b10b828d2831e77ca3930a1.json"
+    },
+    {
+      "channel": "nightly",
+      "platform": "aarch64-pc-windows-msvc",
+      "ref": "i/53669408a953d4843b5f409b90ceaaaa.json"
+    }
+  ],
+  "schema_version": 1
+}

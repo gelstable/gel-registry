@@ -1,0 +1,15 @@
+# Local state and variable files. State lives in HCP Terraform; a local state
+# file here means something went wrong.
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# .terraform.lock.hcl is deliberately NOT ignored. It is committed so that CI
+# and every maintainer resolve the same provider versions and produce the same
+# plan from the same source.
