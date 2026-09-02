@@ -1,0 +1,45 @@
+name: Promote registry releases
+
+"on":
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: promote-registry
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.6"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Authenticate Git for the candidate branch update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh auth setup-git
+
+      - name: Rebuild the rolling promotion candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run .github/scripts/promote.py
