@@ -1,0 +1,7 @@
+{
+  "repositories": [
+    "gelstable/gel",
+    "gelstable/gel-cli"
+  ],
+  "schema_version": 1
+}

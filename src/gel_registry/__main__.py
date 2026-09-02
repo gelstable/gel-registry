@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from collections.abc import Callable, Sequence
@@ -12,7 +13,7 @@ from typing import cast
 
 import httpx
 
-from . import capture, normalize, publication, render, validation
+from . import candidate, capture, normalize, publication, render, validation
 from .constants import CAPTURE_ID
 from .contracts import CaptureManifest
 
@@ -110,8 +111,39 @@ def _run_select_snapshot(args: argparse.Namespace) -> int:
 
 
 def _run_publish_bootstrap(args: argparse.Namespace) -> int:
-    result = publication.publish_bootstrap(Path(args.repo))
+    result = publication.publish_registry(Path(args.repo))
     print(result.snapshot)
+    return 0
+
+
+def _run_build_candidate(args: argparse.Namespace) -> int:
+    with httpx.Client() as client:
+        result = candidate.build_candidate(Path(args.repo), client)
+    print(
+        json.dumps(
+            {
+                "snapshot": result.snapshot,
+                "records": [
+                    str(
+                        candidate.release_record_path(
+                            Path(args.repo), record
+                        ).relative_to(args.repo)
+                    )
+                    for record in result.records
+                ],
+                "rejected": [
+                    {
+                        "repository": rejected.repository,
+                        "release_id": rejected.release_id,
+                        "tag": rejected.tag,
+                        "reason": rejected.reason,
+                    }
+                    for rejected in result.rejected
+                ],
+            },
+            sort_keys=True,
+        )
+    )
     return 0
 
 
@@ -178,6 +210,12 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_repo(publish_parser)
     publish_parser.set_defaults(handler=_run_publish_bootstrap)
 
+    candidate_parser = commands.add_parser(
+        "build-candidate", help="gather release manifests and publish a candidate"
+    )
+    _add_repo(candidate_parser)
+    candidate_parser.set_defaults(handler=_run_build_candidate)
+
     validate_parser = commands.add_parser(
         "validate", help="run deterministic local validation"
     )
@@ -212,6 +250,7 @@ if __name__ == "__main__":  # pragma: no cover - exercised by the console script
 
 __all__ = [
     "capture",
+    "candidate",
     "httpx",
     "main",
     "normalize",
