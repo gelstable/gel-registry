@@ -232,4 +232,3 @@ def test_candidate_updates_existing_open_pr(
     assert not any(
         command[:3] == ["gh", "pr", "create"] for command in recorder.commands
     )
-

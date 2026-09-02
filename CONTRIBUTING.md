@@ -66,12 +66,23 @@ Changes that add a Vercel Function, a rewrite, a redirect, a build command, or
 any build-time network fetch will not be accepted. These are load-bearing for
 the registry's integrity model, not stylistic preferences.
 
-## Registry content
+## Package publishing & registry content
 
-Publishing a snapshot and capturing upstream data are local maintainer
-operations documented in `docs/operations.md`. They do not run in CI and are
-not part of a deployment. If the registry content looks wrong, open an issue
-describing the discrepancy rather than a pull request editing published bytes.
+The registry operates on a **trusted-publisher model**. Package metadata and releases are not added through manual pull requests to this repository.
+
+### Product Publishers
+
+If you are a maintainer of a trusted product repository (such as `gelstable/gel` or `gelstable/gel-cli`):
+- Package entries and rescue replacements are declared by attaching a validated `gel-registry.json` manifest asset directly to your GitHub release.
+- See [`docs/release-manifest.md`](docs/release-manifest.md) for full publisher instructions, the publisher checklist, schema validation, and complete manifest examples.
+
+### Rolling Promotion
+
+The registry automatically discovers non-draft releases bearing `gel-registry.json` from allowlisted repositories and maintains a cumulative rolling pull request (`promote/registry`).
+- See [`docs/rolling-promotion.md`](docs/rolling-promotion.md) for runbook details on how rolling candidates are gathered, validated, and merged.
+- Registry maintainers review and merge this rolling pull request; manual commits or pull requests modifying index bytes directly are rejected.
+
+If registry content appears incorrect or an upstream release was rejected, inspect the diagnostic summary on the rolling PR or open an issue rather than submitting a pull request editing published index bytes.
 
 ## Infrastructure
 

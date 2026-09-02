@@ -13,6 +13,7 @@ from ..contracts import (
     CaptureManifest,
     PackageIndex,
     Pointer,
+    ReleaseManifest,
     ReleaseRecord,
     RootManifest,
     SnapshotListing,
@@ -24,6 +25,7 @@ from .support import canonical_error, capture_root, display_path, read_file, tre
 _SCHEMA_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("capture.json", CaptureManifest),
     ("package-index.json", PackageIndex),
+    ("release-manifest.json", ReleaseManifest),
     ("release-record.json", ReleaseRecord),
     ("pointer.json", Pointer),
     ("root.json", RootManifest),

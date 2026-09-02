@@ -1,0 +1,278 @@
+{
+  "$defs": {
+    "IndexFragment": {
+      "additionalProperties": false,
+      "description": "The exact packages a release adds to one consumer index.",
+      "properties": {
+        "channel": {
+          "minLength": 1,
+          "title": "Channel",
+          "type": "string"
+        },
+        "packages": {
+          "items": {
+            "$ref": "#/$defs/PackageEntry"
+          },
+          "title": "Packages",
+          "type": "array"
+        },
+        "platform": {
+          "minLength": 1,
+          "title": "Platform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel",
+        "platform",
+        "packages"
+      ],
+      "title": "IndexFragment",
+      "type": "object"
+    },
+    "InstallRef": {
+      "additionalProperties": false,
+      "description": "An upstream package install reference.",
+      "properties": {
+        "encoding": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Encoding"
+        },
+        "ref": {
+          "minLength": 1,
+          "title": "Ref",
+          "type": "string"
+        },
+        "type": {
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        },
+        "verification": {
+          "$ref": "#/$defs/Verification"
+        }
+      },
+      "required": [
+        "ref",
+        "type",
+        "verification"
+      ],
+      "title": "InstallRef",
+      "type": "object"
+    },
+    "JsonPrimitive": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonPrimitive"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "PackageEntry": {
+      "additionalProperties": false,
+      "description": "One package and all install references represented by an index.",
+      "properties": {
+        "architecture": {
+          "minLength": 1,
+          "title": "Architecture",
+          "type": "string"
+        },
+        "basename": {
+          "minLength": 1,
+          "title": "Basename",
+          "type": "string"
+        },
+        "build_date": {
+          "minLength": 1,
+          "title": "Build Date",
+          "type": "string"
+        },
+        "installref": {
+          "minLength": 1,
+          "title": "Installref",
+          "type": "string"
+        },
+        "installrefs": {
+          "items": {
+            "$ref": "#/$defs/InstallRef"
+          },
+          "title": "Installrefs",
+          "type": "array"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "slot": {
+          "title": "Slot",
+          "type": "string"
+        },
+        "tags": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Tags",
+          "type": "object"
+        },
+        "version": {
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "version_details": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Version Details",
+          "type": "object"
+        },
+        "version_key": {
+          "minLength": 1,
+          "title": "Version Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basename",
+        "name",
+        "version",
+        "version_details",
+        "version_key",
+        "revision",
+        "build_date",
+        "architecture",
+        "slot",
+        "installref",
+        "installrefs"
+      ],
+      "title": "PackageEntry",
+      "type": "object"
+    },
+    "Replacement": {
+      "additionalProperties": false,
+      "description": "A verified artifact digest and its replacement release URL.",
+      "properties": {
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha256",
+        "url"
+      ],
+      "title": "Replacement",
+      "type": "object"
+    },
+    "Verification": {
+      "additionalProperties": false,
+      "description": "Legacy or release artifact byte verification metadata.",
+      "properties": {
+        "blake2b": {
+          "title": "Blake2B",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        },
+        "size": {
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "blake2b"
+      ],
+      "title": "Verification",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The direct package changes produced for one upstream release.",
+  "properties": {
+    "indexes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/IndexFragment"
+      },
+      "title": "Indexes",
+      "type": "array"
+    },
+    "replacements": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Replacement"
+      },
+      "title": "Replacements",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "title": "ReleaseManifest",
+  "type": "object"
+}

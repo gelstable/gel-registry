@@ -81,9 +81,7 @@ def test_release_records_use_their_source_identity_path(
     """A release path names the source owner, repository, and release ID."""
     release = copy_release(tmp_path)
 
-    assert release.relative_to(tmp_path) == Path(
-        "releases/gelstable/gel-cli/100.json"
-    )
+    assert release.relative_to(tmp_path) == Path("releases/gelstable/gel-cli/100.json")
 
     complete_repository(tmp_path, package_index_data)
     report = validate_local(tmp_path)

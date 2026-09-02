@@ -38,7 +38,6 @@ def _validate_paths(paths: Sequence[str], *, description: str) -> None:
         raise RuntimeError(f"unexpected {description} path: {unexpected[0]}")
 
 
-
 def _remote_oid(run: Runner) -> str:
     output = run(["git", "ls-remote", "--heads", "origin", f"refs/heads/{BRANCH}"])
     return output.split("\t", maxsplit=1)[0].strip() if output else ""
@@ -78,7 +77,6 @@ def _open_pr_numbers(run: Runner) -> list[int]:
     )
     data: Any = json.loads(output) if output.strip() else []
     return [item["number"] for item in data if isinstance(item.get("number"), int)]
-
 
 
 def _update_pr(run: Runner, body: str) -> None:

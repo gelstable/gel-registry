@@ -10,6 +10,7 @@ from ..contracts import (
     CaptureManifest,
     PackageIndex,
     Pointer,
+    ReleaseManifest,
     ReleaseRecord,
     RootManifest,
     SnapshotListing,
@@ -47,6 +48,7 @@ def _support_documents() -> tuple[tuple[str, bytes], ...]:
     models: tuple[tuple[str, type[BaseModel]], ...] = (
         ("capture.json", CaptureManifest),
         ("package-index.json", PackageIndex),
+        ("release-manifest.json", ReleaseManifest),
         ("release-record.json", ReleaseRecord),
         ("pointer.json", Pointer),
         ("root.json", RootManifest),

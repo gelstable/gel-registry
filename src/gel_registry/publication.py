@@ -53,6 +53,7 @@ _SUPPORT_PATHS = frozenset(
         "public/v1/schema/capture.json",
         "public/v1/schema/package-index.json",
         "public/v1/schema/pointer.json",
+        "public/v1/schema/release-manifest.json",
         "public/v1/schema/release-record.json",
         "public/v1/schema/root.json",
         "public/v1/schema/snapshot-listing.json",

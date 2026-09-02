@@ -54,6 +54,7 @@ MUTABLE_PATHS = (
     "public/v1/snapshots.json",
     "vercel.toml",
 )
+RELEASE_MANIFEST_SCHEMA = "public/v1/schema/release-manifest.json"
 RELEASE_RECORD_SCHEMA = "public/v1/schema/release-record.json"
 #: A moving root sits at ``public/``; a pinned root two levels below it. The
 #: leading slash a root-absolute URL would carry is what these exclude.
@@ -129,6 +130,7 @@ def test_publication_installs_exactly_the_generated_support_files(
                 "public/v1/schema/capture.json",
                 "public/v1/schema/package-index.json",
                 "public/v1/schema/pointer.json",
+                RELEASE_MANIFEST_SCHEMA,
                 RELEASE_RECORD_SCHEMA,
                 "public/v1/schema/root.json",
                 "public/v1/schema/snapshot-listing.json",
