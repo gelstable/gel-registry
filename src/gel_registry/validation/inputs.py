@@ -221,7 +221,7 @@ def check_releases(repo: Path, collector: Collector) -> None:
     for relative, raw in sorted(files.items()):
         path = root / relative
         pieces = Path(relative).parts
-        if len(pieces) != 2 or not relative.endswith(".json"):
+        if len(pieces) != 3 or not relative.endswith(".json"):
             collector.add(
                 check, display_path(repo, path), "unexpected release record path"
             )
@@ -234,6 +234,17 @@ def check_releases(repo: Path, collector: Collector) -> None:
         canonical_issue = canonical_error(raw, record)
         if canonical_issue is not None:
             collector.add(check, display_path(repo, path), canonical_issue)
+        owner_and_repository = record.source.repository.split("/")
+        if (
+            len(owner_and_repository) != 2
+            or tuple(pieces[:2]) != tuple(owner_and_repository)
+            or Path(pieces[-1]).stem != str(record.source.release_id)
+        ):
+            collector.add(
+                check,
+                display_path(repo, path),
+                "release record path does not match its source",
+            )
 
 
 def check_schemas(repo: Path, collector: Collector) -> None:

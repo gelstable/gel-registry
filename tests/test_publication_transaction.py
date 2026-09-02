@@ -27,7 +27,12 @@ from support import (
 from gel_registry import __main__ as cli
 from gel_registry import storage
 from gel_registry.constants import CLI_PLATFORMS, LEGACY_PLATFORMS
-from gel_registry.contracts import IndexFragment, PackageIndex, ReleaseRecord, RootManifest
+from gel_registry.contracts import (
+    IndexFragment,
+    PackageIndex,
+    ReleaseRecord,
+    RootManifest,
+)
 from gel_registry.digest import blob_id, canonical_json, snapshot_id
 from gel_registry.publication import (
     PublicationError,
@@ -162,8 +167,6 @@ def test_publication_is_idempotent_and_composes_committed_releases(
     for platform in LEGACY_PLATFORMS:
         write_bootstrap(tmp_path, "stable", platform, [package(version="0.9.0")])
     release = copy_release(tmp_path, "1.0.0")
-    duplicate = tmp_path / "releases" / "gel-cli" / "duplicate.json"
-    duplicate.write_bytes(release.read_bytes())
 
     first = publish_bootstrap(tmp_path)
     before = _repo_bytes(tmp_path)
@@ -228,7 +231,6 @@ def test_publication_is_idempotent_and_composes_committed_releases(
     data = json.loads(release.read_text())
     data["source"]["published_at"] = "2036-08-15T12:00:00Z"
     release.write_bytes(canonical_json(data))
-    duplicate.write_bytes(release.read_bytes())
     assert build_snapshot(tmp_path) == first.snapshot
     assert _published_indexes(tmp_path, first.snapshot)[key] == rendered_bytes
     assert b"2036-08-15" not in rendered_bytes
@@ -240,7 +242,7 @@ def test_the_pointer_alone_selects_which_snapshot_the_moving_documents_serve(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _write_index(tmp_path, package_index_data)
-    copy_release(tmp_path, "1.0.0")
+    release = copy_release(tmp_path, "1.0.0")
 
     # Building a snapshot neither reads nor writes the pointer.
     unreadable = tmp_path / "pointers" / "latest.json"
@@ -253,7 +255,7 @@ def test_the_pointer_alone_selects_which_snapshot_the_moving_documents_serve(
     assert not (tmp_path / "public" / "registry.json").exists()
     assert not (tmp_path / "public" / "v1" / "snapshots.json").exists()
 
-    (tmp_path / "releases" / "gel-cli" / "1.0.0.json").unlink()
+    release.unlink()
     copy_release(tmp_path, "2.0.0")
     new = build_snapshot(tmp_path)
     assert old != new
@@ -316,8 +318,9 @@ def _support_schema_drift(repo: Path) -> None:
 def _contested_release_identity(repo: Path) -> None:
     release = copy_release(repo)
     data = json.loads(release.read_bytes())
+    data["source"]["release_id"] = 101
     data["indexes"][0]["packages"][0]["revision"] = "2"
-    (repo / "releases" / "gel-cli" / "duplicate.json").write_bytes(canonical_json(data))
+    (release.parent / "101.json").write_bytes(canonical_json(data))
 
 
 def _symlinked_snapshot_parent(repo: Path) -> None:

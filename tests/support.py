@@ -90,8 +90,10 @@ def fixture_release(version: str = "1.0.0") -> ReleaseRecord:
         entry["installref"] = prefix + f"gel-cli-{platform}"
         entry["installrefs"] = [
             {
-                **entry["installrefs"][0],
                 "ref": entry["installref"],
+                "type": "application/octet-stream",
+                "encoding": "identity",
+                "verification": verification(),
             }
         ]
         fragments.append(
@@ -109,9 +111,11 @@ def fixture_release(version: str = "1.0.0") -> ReleaseRecord:
 
 
 def copy_release(repo: Path, version: str = "1.0.0") -> Path:
-    path = repo / "releases" / "gel-cli" / f"{version}.json"
+    record = fixture_release(version)
+    owner, repository = record.source.repository.split("/")
+    path = repo / "releases" / owner / repository / f"{record.source.release_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(canonical_json(fixture_release(version)))
+    path.write_bytes(canonical_json(record))
     return path
 
 
@@ -161,4 +165,3 @@ def complete_repository(root: Path, package_index_data: dict[str, object]) -> No
     write_pointer(root, snapshot)
     select_snapshot(root)
     render_schemas(root)
-    IndexFragment,
