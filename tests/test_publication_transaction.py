@@ -27,7 +27,7 @@ from support import (
 from gel_registry import __main__ as cli
 from gel_registry import storage
 from gel_registry.constants import CLI_PLATFORMS, LEGACY_PLATFORMS
-from gel_registry.contracts import PackageIndex, ReleaseRecord, RootManifest
+from gel_registry.contracts import IndexFragment, PackageIndex, ReleaseRecord, RootManifest
 from gel_registry.digest import blob_id, canonical_json, snapshot_id
 from gel_registry.publication import (
     PublicationError,
@@ -173,8 +173,8 @@ def test_publication_is_idempotent_and_composes_committed_releases(
     assert second.changed_paths == ()
     assert _repo_bytes(tmp_path) == before
 
-    # A committed release is composed into the platform indexes its artifacts
-    # name, and only those; the release file itself is an input, never output.
+    # A committed release is composed into the indexes it explicitly names;
+    # the release file itself is an input, never output.
     published = _published_indexes(tmp_path, first.snapshot)
     for (channel, platform), data in published.items():
         if channel != "stable":
@@ -185,22 +185,19 @@ def test_publication_is_idempotent_and_composes_committed_releases(
         assert ("1.0.0" in versions) is (platform in CLI_PLATFORMS)
     assert release.relative_to(tmp_path).as_posix() not in first.changed_paths
 
-    # Composition follows the record's own artifact platforms, so a product the
-    # legacy matrix never knew about still renders.
+    # Composition follows the record's own fragments, so an index the legacy
+    # matrix never knew about still renders.
     source = ReleaseRecord.model_validate_json(release.read_bytes())
-    # Remap one platform's artifacts rather than every platform's. Collapsing
-    # the whole matrix onto a single name would hand composition five identity
-    # artifacts for one platform, which is not a shape a release record is
-    # allowed to have.
     original = CLI_PLATFORMS[0]
+    fragment = next(index for index in source.indexes if index.platform == original)
     future = source.model_copy(
         update={
-            "product": "future-product",
-            "channel": "testing",
-            "artifacts": tuple(
-                artifact.model_copy(update={"platform": "future-x86_64"})
-                for artifact in source.artifacts
-                if artifact.platform == original
+            "indexes": (
+                IndexFragment(
+                    channel="testing",
+                    platform="future-x86_64",
+                    packages=fragment.packages,
+                ),
             ),
         }
     )
@@ -224,12 +221,12 @@ def test_publication_is_idempotent_and_composes_committed_releases(
         tuple(reversed(releases)),
     )
 
-    # promoted_at is provenance, not content: it reaches neither the rendered
+    # published_at is provenance, not content: it reaches neither the rendered
     # packages nor the snapshot identity.
     key = ("stable", "x86_64-unknown-linux-musl")
     rendered_bytes = published[key]
     data = json.loads(release.read_text())
-    data["promoted_at"] = "2036-08-15T12:00:00Z"
+    data["source"]["published_at"] = "2036-08-15T12:00:00Z"
     release.write_bytes(canonical_json(data))
     duplicate.write_bytes(release.read_bytes())
     assert build_snapshot(tmp_path) == first.snapshot
@@ -319,7 +316,7 @@ def _support_schema_drift(repo: Path) -> None:
 def _contested_release_identity(repo: Path) -> None:
     release = copy_release(repo)
     data = json.loads(release.read_bytes())
-    data["artifacts"][0]["sha256"] = "e" * 64
+    data["indexes"][0]["packages"][0]["revision"] = "2"
     (repo / "releases" / "gel-cli" / "duplicate.json").write_bytes(canonical_json(data))
 
 

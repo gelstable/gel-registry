@@ -21,27 +21,30 @@ from .public import (
     SnapshotListing,
 )
 from .release import (
-    Artifact,
+    IndexFragment,
+    ReleaseManifest,
     ReleaseRecord,
     ReleaseSource,
-    media_type_for_platform,
+    Replacement,
 )
 
 __all__ = [
-    "Artifact",
     "BlockedCategory",
     "BlockedManifest",
     "BlockedRelease",
     "CaptureEntry",
     "CaptureManifest",
     "InstallRef",
+    "IndexFragment",
     "JsonValue",
     "ManifestIndex",
     "PackageEntry",
     "PackageIndex",
     "Pointer",
     "ReleaseRecord",
+    "ReleaseManifest",
     "ReleaseSource",
+    "Replacement",
     "RootIndex",
     "RootManifest",
     "SemVer",
@@ -49,7 +52,6 @@ __all__ = [
     "SnapshotListing",
     "StrictString",
     "Verification",
-    "media_type_for_platform",
     "parse_semver",
     "semver_key",
 ]

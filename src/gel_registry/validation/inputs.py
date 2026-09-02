@@ -234,18 +234,6 @@ def check_releases(repo: Path, collector: Collector) -> None:
         canonical_issue = canonical_error(raw, record)
         if canonical_issue is not None:
             collector.add(check, display_path(repo, path), canonical_issue)
-        if pieces[0] != record.product:
-            collector.add(
-                check,
-                display_path(repo, path),
-                "release record path does not match its product",
-            )
-        if Path(pieces[-1]).stem != record.version:
-            collector.add(
-                check,
-                display_path(repo, path),
-                "record filename does not match its version",
-            )
 
 
 def check_schemas(repo: Path, collector: Collector) -> None:

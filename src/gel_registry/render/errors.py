@@ -10,13 +10,9 @@ class RenderError(RuntimeError):
 class ContestedIdentityError(RenderError):
     """Raised when one package identity has different serialized entries."""
 
-    def __init__(self, identity: tuple[str, str, str]) -> None:
+    def __init__(self, identity: tuple[str, ...]) -> None:
         self.identity = identity
-        basename, version, slot = identity
-        super().__init__(
-            "contested package identity "
-            f"(basename={basename!r}, version={version!r}, slot={slot!r})"
-        )
+        super().__init__(f"contested package identity {identity!r}")
 
 
 __all__ = ["ContestedIdentityError", "RenderError"]
