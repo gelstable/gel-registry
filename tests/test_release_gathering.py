@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -12,6 +13,7 @@ from pytest_httpx import HTTPXMock
 from gel_registry.contracts import ReleaseRecord
 from gel_registry.digest import canonical_json
 from gel_registry.gather import gather_missing
+from gel_registry.github import GitHubAsset, GitHubRelease, fetch_manifest_asset
 
 
 def _manifest(repository: str, tag: str, name: str = "artifact") -> dict[str, object]:
@@ -101,6 +103,36 @@ def _add_release_list(
         url=f"https://api.github.com/repos/{repository}/releases?per_page=100",
         json=releases,
     )
+
+
+def test_manifest_asset_transport_follows_a_github_redirect(
+    httpx_mock: HTTPXMock,
+) -> None:
+    """A GitHub asset redirect still returns the manifest bytes."""
+    release = GitHubRelease(
+        repository="gelstable/gel",
+        release_id=2,
+        tag="v2",
+        published_at=datetime(2026, 8, 15, tzinfo=UTC),
+        draft=False,
+        assets=(
+            GitHubAsset(
+                name="gel-registry.json",
+                api_url="https://api.github.com/assets/2",
+            ),
+        ),
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/assets/2",
+        status_code=302,
+        headers={"Location": "https://objects.github.com/assets/2"},
+    )
+    httpx_mock.add_response(
+        url="https://objects.github.com/assets/2", content=b'{"schema_version":1}'
+    )
+
+    with httpx.Client() as client:
+        assert fetch_manifest_asset(client, release) == b'{"schema_version":1}'
 
 
 def test_gather_collects_every_valid_manifest_missing_from_committed_main(

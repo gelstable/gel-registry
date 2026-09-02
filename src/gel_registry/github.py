@@ -111,7 +111,9 @@ def fetch_manifest_asset(client: httpx.Client, release: GitHubRelease) -> bytes:
     if len(assets) != 1:
         raise ValueError("release does not have one gel-registry.json asset")
     response = client.get(
-        assets[0].api_url, headers={"Accept": "application/octet-stream"}
+        assets[0].api_url,
+        headers={"Accept": "application/octet-stream"},
+        follow_redirects=True,
     )
     response.raise_for_status()
     return response.content
