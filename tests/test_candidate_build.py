@@ -141,3 +141,57 @@ def test_build_candidate_publishes_rescue_and_net_new_records_together(
     with httpx.Client() as client:
         repeated = build_candidate(tmp_path, client)
     assert repeated.snapshot == result.snapshot
+
+
+def test_production_allowlist_promotes_postgis_rescue_and_net_new_release(
+    tmp_path: Path, httpx_mock: HTTPXMock
+) -> None:
+    """The trusted PostGIS publisher can rescue and add packages together."""
+    rescue = package("gel-postgis", "3.5.2", ref_suffix="old")
+    write_bootstrap(tmp_path, "stable", "x86_64-unknown-linux-gnu", [rescue])
+    (tmp_path / "sources").mkdir()
+    (tmp_path / "sources" / "github.json").write_bytes(
+        (Path(__file__).parents[1] / "sources" / "github.json").read_bytes()
+    )
+    for repository in ("gelstable/gel", "gelstable/gel-cli"):
+        httpx_mock.add_response(
+            url=f"https://api.github.com/repos/{repository}/releases?per_page=100",
+            json=[],
+        )
+    repository = "gelstable/gel-postgis"
+    tag = "v3.5.3"
+    httpx_mock.add_response(
+        url=f"https://api.github.com/repos/{repository}/releases?per_page=100",
+        json=[_release(repository, 303, tag)],
+        is_optional=True,
+    )
+    manifest = _manifest(
+        repository,
+        tag,
+        package("gel-postgis", "3.5.3", ref_suffix="new"),
+    )
+    manifest["replacements"] = _rescue_manifest(repository, tag)["replacements"]
+    httpx_mock.add_response(
+        url="https://api.github.com/assets/303",
+        content=json.dumps(manifest).encode(),
+        is_optional=True,
+    )
+
+    with httpx.Client() as client:
+        result = build_candidate(tmp_path, client)
+
+    assert _record_paths(tmp_path) == (
+        "releases/gelstable/gel-postgis/303.json",
+    )
+    root = RootManifest.model_validate_json(
+        (tmp_path / "public" / "s" / result.snapshot / "registry.json").read_bytes()
+    )
+    blob = tmp_path / "public" / "i" / Path(root.indexes[0].ref).name
+    packages = json.loads(blob.read_bytes())["packages"]
+    assert {entry["version"] for entry in packages} == {"3.5.2", "3.5.3"}
+    assert all(
+        entry["installref"].startswith(
+            f"https://github.com/{repository}/releases/download/{tag}/"
+        )
+        for entry in packages
+    )
