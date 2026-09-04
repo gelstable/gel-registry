@@ -9,13 +9,14 @@ pinned tree.
 
 from __future__ import annotations
 
-from .errors import ContestedIdentityError, RenderError
+from .errors import ContestedIdentityError, ContestedReplacementError, RenderError
 from .schemas import is_approved_release_record_predecessor, render_schemas
 from .selection import select_snapshot
 from .snapshots import build_snapshot, load_pinned_snapshot
 
 __all__ = [
     "ContestedIdentityError",
+    "ContestedReplacementError",
     "RenderError",
     "build_snapshot",
     "is_approved_release_record_predecessor",

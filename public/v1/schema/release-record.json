@@ -13,6 +13,7 @@
           "items": {
             "$ref": "#/$defs/PackageEntry"
           },
+          "minItems": 1,
           "title": "Packages",
           "type": "array"
         },
@@ -282,6 +283,28 @@
     }
   },
   "additionalProperties": false,
+  "anyOf": [
+    {
+      "properties": {
+        "replacements": {
+          "minItems": 1
+        }
+      },
+      "required": [
+        "replacements"
+      ]
+    },
+    {
+      "properties": {
+        "indexes": {
+          "minItems": 1
+        }
+      },
+      "required": [
+        "indexes"
+      ]
+    }
+  ],
   "description": "A direct release manifest bound to one GitHub release.",
   "properties": {
     "indexes": {

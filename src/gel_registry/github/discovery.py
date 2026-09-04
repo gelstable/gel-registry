@@ -1,35 +1,20 @@
-"""Small, allowlist-oriented GitHub release transport."""
+"""Discovery operations for GitHub repository releases and manifest assets."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlsplit
 
 import httpx
 
-
-@dataclass(frozen=True)
-class GitHubAsset:
-    name: str
-    api_url: str
-
-
-@dataclass(frozen=True)
-class GitHubRelease:
-    repository: str
-    release_id: int
-    tag: str
-    published_at: datetime
-    draft: bool
-    assets: tuple[GitHubAsset, ...]
+from .models import DiscoveredAsset, DiscoveredRelease
 
 
 def _release_endpoint(repository: str) -> str:
     return f"https://api.github.com/repos/{repository}/releases"
 
 
-def _parse_release(repository: str, data: object) -> GitHubRelease:
+def _parse_release(repository: str, data: object) -> DiscoveredRelease:
     if not isinstance(data, dict):
         raise ValueError("GitHub release response contains a non-object release")
     assets = data.get("assets")
@@ -54,7 +39,7 @@ def _parse_release(repository: str, data: object) -> GitHubRelease:
         timestamp = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError("GitHub release response has invalid published_at") from exc
-    parsed_assets: list[GitHubAsset] = []
+    parsed_assets: list[DiscoveredAsset] = []
     for asset in assets:
         if not isinstance(asset, dict):
             raise ValueError("GitHub release response contains a non-object asset")
@@ -62,8 +47,8 @@ def _parse_release(repository: str, data: object) -> GitHubRelease:
         api_url = asset.get("url")
         if not isinstance(name, str) or not isinstance(api_url, str):
             raise ValueError("GitHub release response has invalid asset fields")
-        parsed_assets.append(GitHubAsset(name=name, api_url=api_url))
-    return GitHubRelease(
+        parsed_assets.append(DiscoveredAsset(name=name, api_url=api_url))
+    return DiscoveredRelease(
         repository=repository,
         release_id=release_id,
         tag=tag,
@@ -82,10 +67,12 @@ def _valid_next_url(url: str, repository: str) -> bool:
     )
 
 
-def list_releases(client: httpx.Client, repository: str) -> tuple[GitHubRelease, ...]:
+def list_releases(
+    client: httpx.Client, repository: str
+) -> tuple[DiscoveredRelease, ...]:
     """Return every GitHub release for one exact allowlisted repository."""
     url = f"{_release_endpoint(repository)}?per_page=100"
-    releases: list[GitHubRelease] = []
+    releases: list[DiscoveredRelease] = []
     while True:
         response = client.get(url)
         response.raise_for_status()
@@ -105,7 +92,7 @@ def list_releases(client: httpx.Client, repository: str) -> tuple[GitHubRelease,
     return tuple(sorted(releases, key=lambda release: release.release_id))
 
 
-def fetch_manifest_asset(client: httpx.Client, release: GitHubRelease) -> bytes:
+def fetch_manifest_asset(client: httpx.Client, release: DiscoveredRelease) -> bytes:
     """Fetch the unique gel-registry.json asset from one release."""
     assets = [asset for asset in release.assets if asset.name == "gel-registry.json"]
     if len(assets) != 1:
@@ -117,3 +104,6 @@ def fetch_manifest_asset(client: httpx.Client, release: GitHubRelease) -> bytes:
     )
     response.raise_for_status()
     return response.content
+
+
+__all__ = ["fetch_manifest_asset", "list_releases"]

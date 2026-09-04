@@ -16,6 +16,7 @@ import httpx
 from . import candidate, capture, normalize, publication, render, validation
 from .constants import CAPTURE_ID
 from .contracts import CaptureManifest
+from .github import create_github_client
 
 type Handler = Callable[[argparse.Namespace], int]
 
@@ -117,7 +118,7 @@ def _run_publish_bootstrap(args: argparse.Namespace) -> int:
 
 
 def _run_build_candidate(args: argparse.Namespace) -> int:
-    with httpx.Client() as client:
+    with create_github_client() as client:
         result = candidate.build_candidate(Path(args.repo), client)
     print(
         json.dumps(

@@ -180,9 +180,7 @@ def test_production_allowlist_promotes_postgis_rescue_and_net_new_release(
     with httpx.Client() as client:
         result = build_candidate(tmp_path, client)
 
-    assert _record_paths(tmp_path) == (
-        "releases/gelstable/gel-postgis/303.json",
-    )
+    assert _record_paths(tmp_path) == ("releases/gelstable/gel-postgis/303.json",)
     root = RootManifest.model_validate_json(
         (tmp_path / "public" / "s" / result.snapshot / "registry.json").read_bytes()
     )

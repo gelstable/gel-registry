@@ -49,6 +49,14 @@ concurrency:
 
 Cancellation is explicitly **disabled** (`cancel-in-progress: false`). If a workflow run is active, any new run queues rather than aborting the running execution midway. This protects in-flight candidate construction and remote git lease updates against arbitrary mid-run cancellation.
 
+### Authenticated GitHub Client and Transport
+
+The promotion pipeline uses `create_github_client()` to communicate with upstream GitHub repositories:
+
+- **Token Resolution**: Resolves tokens from `GH_TOKEN` or `GITHUB_TOKEN` environment variables (with precedence given to `GH_TOKEN`), or runs unauthenticated if neither is present.
+- **Host-Scoped Authentication (`GitHubTokenAuth`)**: The bearer token is sent strictly to official GitHub endpoints (`api.github.com`, `uploads.github.com`). If any request redirects to a non-GitHub host (e.g., an S3 asset bucket or CDN), authentication headers are stripped automatically to prevent credential leakage.
+- **API Versioning and Headers**: Requests set `X-GitHub-Api-Version: 2022-11-28` and appropriate media type headers (`application/vnd.github+json` for metadata, `application/octet-stream` for asset content).
+
 ### Force-with-Lease Protection
 
 Before rebuilding the candidate, `.github/scripts/promote.py` queries and records the remote OID of `refs/heads/promote/registry` (if the branch exists remotely).
@@ -118,8 +126,10 @@ These failures indicate that the environment cannot reliably observe upstream st
 
 ### 3. Composition Invariant Conflicts (Candidate Abort)
 
-Certain semantic conflicts require human resolution and abort candidate publication:
+Certain semantic conflicts require human resolution and abort candidate publication entirely:
 
+- **Contested Replacement Claims (`ContestedReplacementError`)**:
+  Cross-record replacement claims cannot be resolved by ordering. If two or more release records claim the same replacement SHA-256 digest—even if they specify the exact same target replacement URL—the pipeline rejects the candidate deterministically. Candidate composition indexes all replacement claims across all records first, detects the duplicate claim, and raises `ContestedReplacementError` with deterministically sorted sources before any package buckets are mutated. The candidate run aborts immediately; no commit is made, no branch is pushed, and no pull request is edited. Maintainers must resolve the ambiguity before promotion can proceed.
 - **Contested Package Identity**: Two different package entries claim the same installable identity `(kind, basename, version, ...)`.
 - **Unknown Rescue Digest**: A rescue replacement digest is absent from the historical mirror.
 - **Ambiguous Rescue Digest**: A rescue replacement digest matches more than one distinct historical artifact.

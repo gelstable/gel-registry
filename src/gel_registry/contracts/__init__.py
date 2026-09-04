@@ -26,6 +26,8 @@ from .release import (
     ReleaseRecord,
     ReleaseSource,
     Replacement,
+    validate_release_url,
+    validate_repository_name,
 )
 
 __all__ = [
@@ -54,4 +56,6 @@ __all__ = [
     "Verification",
     "parse_semver",
     "semver_key",
+    "validate_release_url",
+    "validate_repository_name",
 ]

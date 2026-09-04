@@ -16,7 +16,7 @@ from ..contracts import (
     RootManifest,
 )
 from ..digest import canonical_json
-from .errors import ContestedIdentityError, RenderError
+from .errors import ContestedIdentityError, ContestedReplacementError, RenderError
 
 
 @dataclass(frozen=True)
@@ -78,33 +78,48 @@ def apply_replacements(
     mirror: MirrorDigestIndex,
     records: Iterable[ReleaseRecord],
 ) -> None:
+    claims: dict[str, list[tuple[ReleaseRecord, str]]] = {}
     for record in records:
         for replacement in record.replacements:
-            location = mirror.get(replacement.sha256)
-            if location is None:
-                reason = "ambiguous" if replacement.sha256 in mirror else "absent"
-                raise RenderError(
-                    f"replacement digest is {reason}: {replacement.sha256}"
+            claims.setdefault(replacement.sha256, []).append((record, replacement.url))
+
+    for digest in sorted(claims):
+        claimants = claims[digest]
+        if len(claimants) > 1:
+            sources = tuple(
+                sorted(
+                    (
+                        f"{r.source.repository}@{r.source.tag} "
+                        f"(release {r.source.release_id})"
+                    )
+                    for r, _url in claimants
                 )
-            _serialized, package = packages[location.index][location.identity]
-            new_refs = tuple(
-                reference
-                if reference.verification.sha256 != replacement.sha256
-                else reference.model_copy(update={"ref": replacement.url})
-                for reference in package.installrefs
             )
-            new_installref = (
-                replacement.url
-                if selected_reference_sha256(package) == replacement.sha256
-                else package.installref
-            )
-            updated = package.model_copy(
-                update={"installref": new_installref, "installrefs": new_refs}
-            )
-            packages[location.index][location.identity] = (
-                canonical_json(updated),
-                updated,
-            )
+            raise ContestedReplacementError(digest, sources)
+
+    for digest in sorted(claims):
+        _record, url = claims[digest][0]
+        location = mirror.get(digest)
+        if location is None:
+            reason = "ambiguous" if digest in mirror else "absent"
+            raise RenderError(f"replacement digest is {reason}: {digest}")
+        _serialized, package = packages[location.index][location.identity]
+        new_refs = tuple(
+            reference
+            if reference.verification.sha256 != digest
+            else reference.model_copy(update={"ref": url})
+            for reference in package.installrefs
+        )
+        new_installref = (
+            url if selected_reference_sha256(package) == digest else package.installref
+        )
+        updated = package.model_copy(
+            update={"installref": new_installref, "installrefs": new_refs}
+        )
+        packages[location.index][location.identity] = (
+            canonical_json(updated),
+            updated,
+        )
 
 
 def add_index_fragments(

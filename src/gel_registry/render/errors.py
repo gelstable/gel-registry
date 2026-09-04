@@ -15,4 +15,16 @@ class ContestedIdentityError(RenderError):
         super().__init__(f"contested package identity {identity!r}")
 
 
-__all__ = ["ContestedIdentityError", "RenderError"]
+class ContestedReplacementError(RenderError):
+    """Raised when multiple release records claim the same replacement digest."""
+
+    def __init__(self, sha256: str, sources: tuple[str, ...]) -> None:
+        self.sha256 = sha256
+        self.sources = sources
+        sources_desc = ", ".join(sources)
+        super().__init__(
+            f"contested replacement digest {sha256}: claimed by {sources_desc}"
+        )
+
+
+__all__ = ["ContestedIdentityError", "ContestedReplacementError", "RenderError"]

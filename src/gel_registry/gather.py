@@ -5,14 +5,19 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
 
 import httpx
 from pydantic import ValidationError
 
-from .contracts import ReleaseManifest, ReleaseRecord, ReleaseSource
+from .contracts import (
+    ReleaseManifest,
+    ReleaseRecord,
+    ReleaseSource,
+    validate_release_url,
+    validate_repository_name,
+)
 from .digest import canonical_json
-from .github import GitHubRelease, fetch_manifest_asset, list_releases
+from .github import DiscoveredRelease, fetch_manifest_asset, list_releases
 from .render import RenderError, files
 
 
@@ -40,18 +45,33 @@ def load_repositories(repo: Path) -> tuple[str, ...]:
     if (
         not isinstance(repositories, list)
         or not all(isinstance(repository, str) for repository in repositories)
-        or any(repository.count("/") != 1 for repository in repositories)
         or len(repositories) != len(set(repositories))
     ):
         raise ValueError("GitHub source allowlist has invalid repositories")
+    for repository in repositories:
+        try:
+            validate_repository_name(repository)
+        except ValueError as exc:
+            raise ValueError(
+                f"GitHub source allowlist has invalid repository: {exc}"
+            ) from exc
     if raw != canonical_json({"repositories": repositories, "schema_version": 1}):
         raise ValueError("GitHub source allowlist is not canonical")
     return tuple(repositories)
 
 
 def _record_path(repo: Path, record: ReleaseRecord) -> Path:
+    validate_repository_name(record.source.repository)
     owner, repository = record.source.repository.split("/", 1)
-    return repo / "releases" / owner / repository / f"{record.source.release_id}.json"
+    base = repo / "releases"
+    target = base / owner / repository / f"{record.source.release_id}.json"
+    try:
+        target.relative_to(base)
+    except ValueError as exc:
+        raise ValueError(
+            f"record path escapes releases directory: {record.source.repository}"
+        ) from exc
+    return target
 
 
 def load_records(repo: Path) -> tuple[ReleaseRecord, ...]:
@@ -79,14 +99,16 @@ def load_records(repo: Path) -> tuple[ReleaseRecord, ...]:
     return tuple(records)
 
 
-def _asset_names_are_bound(record: ReleaseRecord, release: GitHubRelease) -> None:
+def _asset_names_are_bound(record: ReleaseRecord, release: DiscoveredRelease) -> None:
     names = {asset.name for asset in release.assets}
     from .contracts.release import release_urls
 
     for url in release_urls(record):
-        if unquote(urlsplit(url).path.rsplit("/", 1)[-1]) not in names:
+        asset_name = validate_release_url(url, release.repository, release.tag)
+        if asset_name not in names:
             raise ValueError(
-                "release record references an asset absent from the release"
+                "release record references an asset absent from the release: "
+                f"{asset_name}"
             )
 
 
@@ -95,7 +117,7 @@ def _reason(error: Exception) -> str:
     return (message or error.__class__.__name__).splitlines()[0]
 
 
-def _bind_manifest(raw: bytes, release: GitHubRelease) -> ReleaseRecord:
+def _bind_manifest(raw: bytes, release: DiscoveredRelease) -> ReleaseRecord:
     manifest = ReleaseManifest.model_validate_json(raw)
     record = ReleaseRecord(
         **manifest.model_dump(),

@@ -4,6 +4,15 @@ This document defines how trusted product repositories publish package releases 
 
 The Gel Registry operates on a **trusted-publisher model**. Product release workflows are responsible for authoring and verifying package metadata, and publishing that metadata in a single manifest asset named `gel-registry.json` attached to the GitHub release. The registry discovers eligible releases, validates the manifest against its schema, and promotes entries into the distribution index.
 
+### The Single Publisher and Rescue Seam
+
+The **sole accepted integration seam** for both regular package releases and legacy rescue operations is `gel-registry.json`:
+- **`replacements` (Historical Rescue)**: The only mechanism for rescuing historical artifacts. Replaces download URLs of historical artifacts originally mirrored from `packages.geldata.com` with assets hosted on GitHub Releases, keyed exclusively by exact SHA-256 hex digest. All other historical metadata (package name, version, architecture, slot, tags, and verification digests) remains completely untouched.
+- **`indexes` (Net-New Releases)**: The mechanism for net-new releases. Requires complete client-ready `PackageEntry` definitions (including version details, revision, architecture, slot, and installrefs with sha256, blake2b, and byte size).
+- **Draft Releases Are Invisible**: GitHub releases marked as `draft` are completely invisible to registry discovery; only published non-draft releases are evaluated.
+- **No Rescue-Specific Evidence Ingestion**: The registry never ingests rescue-specific evidence formats, legacy capture manifests, or internal audit logs.
+- **Zero Artifact Downloads or Binary Inspection**: The registry never downloads release binaries, inspects package files, executes decompresors, or parses ELF/Mach-O headers during release promotion.
+
 ## Publisher responsibilities and boundary
 
 The boundary between product release workflows and the registry is strictly defined.
@@ -20,7 +29,7 @@ The boundary between product release workflows and the registry is strictly defi
 
 - Ingesting releases only from allowlisted repositories declared in `sources/github.json`.
 - Enforcing that every artifact URL names an asset hosted directly on the declaring repository and tag (`https://github.com/<owner>/<repo>/releases/download/<tag>/...`).
-- Ensuring rescue digests resolve uniquely against historical mirror records.
+- Ensuring rescue digests resolve uniquely against historical mirror records, rejecting contested cross-record replacement claims deterministically.
 - Verifying that package entries satisfy the structural contract and do not conflict with existing identities.
 - Ensuring committed release records are canonical and append-only under `releases/<owner>/<repository>/<release-id>.json`.
 - Ensuring rendered public distribution snapshots exactly match committed inputs.

@@ -58,8 +58,13 @@ def _write_records(repo: Path, records: tuple[ReleaseRecord, ...]) -> None:
             path.write_bytes(data)
 
 
-def build_candidate(repo: Path, client: httpx.Client) -> CandidateResult:
+def build_candidate(repo: Path, client: httpx.Client | None = None) -> CandidateResult:
     """Gather missing records and publish one complete local candidate."""
+    if client is None:
+        from .github import create_github_client
+
+        with create_github_client() as default_client:
+            return build_candidate(repo, default_client)
     gathered: GatherResult = gather_missing(repo, client)
     _write_records(repo, gathered.records)
     publication = publish_registry(repo)
