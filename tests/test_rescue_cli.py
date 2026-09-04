@@ -1,9 +1,11 @@
-"""The rescue-capture and rescue-plan commands, driven through ``main``."""
+"""The rescue CLI commands, driven through ``main``."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 from gel_registry import __main__ as main_module
@@ -102,3 +104,71 @@ def test_rescue_plan_prints_canonical_json(
     )
     assert exit_code == 0
     assert capsys.readouterr().out == canonical_json(plan).decode("utf-8")
+
+
+def test_rescue_publish_requires_a_plan_path() -> None:
+    """Publishing without an explicit plan must never be possible."""
+
+    with pytest.raises(SystemExit) as error:
+        main(["rescue-publish"])
+    assert error.value.code == 2
+
+
+def test_rescue_publish_dry_run_prints_operations_and_mutates_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The dry run performs the whole preflight without POSTing anything."""
+
+    requests: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, str(request.url)))
+        if request.url.host == "packages.edgedb.com":
+            return httpx.Response(200)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(
+        main_module,
+        "create_github_client",
+        lambda: httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_bytes(canonical_json(_cli_plan()))
+
+    assert (
+        main(
+            [
+                "rescue-publish",
+                "--plan",
+                str(plan_path),
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert "dry run: no releases or assets were created" in output
+    assert "create draft release gelstable/gel@legacy-v7" in output
+    assert "total uploads: 2" in output
+    assert [method for method, _ in requests] == ["GET", "HEAD"]
+
+
+def test_rescue_publish_reports_a_preflight_conflict_as_a_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        main_module,
+        "create_github_client",
+        lambda: httpx.Client(
+            transport=httpx.MockTransport(lambda _request: httpx.Response(404))
+        ),
+    )
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_bytes(canonical_json(_cli_plan(repository="attacker/repo")))
+
+    assert main(["rescue-publish", "--plan", str(plan_path)]) == 1
+    assert "not allowlisted" in capsys.readouterr().err

@@ -18,6 +18,7 @@ from .constants import CAPTURE_ID
 from .contracts import CaptureManifest
 from .digest import canonical_json
 from .github import create_github_client
+from .rescue import load_plan, publish_plan
 from .rescue.indexes import capture_rescue_indexes
 from .rescue.selection import GitHubTagSource, GitTagSource, plan_rescue
 
@@ -110,6 +111,15 @@ def _run_rescue_plan(args: argparse.Namespace) -> int:
                 tag_source=GitHubTagSource(client),
             )
     sys.stdout.buffer.write(canonical_json(plan))
+    return 0
+
+
+def _run_rescue_publish(args: argparse.Namespace) -> int:
+    plan = load_plan(Path(args.plan))
+    with create_github_client() as client:
+        lines = publish_plan(client, plan, dry_run=bool(args.dry_run))
+    for line in lines:
+        print(line)
     return 0
 
 
@@ -243,6 +253,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     rescue_plan_parser.set_defaults(handler=_run_rescue_plan)
+
+    rescue_publish_parser = commands.add_parser(
+        "rescue-publish",
+        help="create draft releases and upload rescued assets",
+    )
+    rescue_publish_parser.add_argument("--plan", required=True, type=Path)
+    rescue_publish_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="run the full preflight and print intended operations only",
+    )
+    rescue_publish_parser.set_defaults(handler=_run_rescue_publish)
 
     live_parser = commands.add_parser(
         "verify-capture-live", help="explicitly rehearse the capture remotely"

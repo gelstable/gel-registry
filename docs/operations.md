@@ -170,6 +170,78 @@ Verify schemas and snapshots offline:
 uv run gel-registry validate --repo .
 ```
 
+## Legacy rescue runbook
+
+The legacy rescue subsystem captures legacy index packages from `packages.edgedb.com`, plans migration into GitHub draft releases for eligible upstream versions, streams original artifacts directly to draft releases, uploads a replacement-only `gel-registry.json` manifest, and relies exclusively on manual operator review and publication followed by the standard promotion pipeline.
+
+### Capture legacy indexes
+
+Capture the 24-entry matrix from `packages.edgedb.com` into `upstream/packages.edgedb.com/<capture-id>/`:
+
+```text
+uv run gel-registry rescue-capture --repo . --captured-at 2026-08-20T12:00:00Z
+```
+
+The capture records each index's exact SHA-256 digest and byte size. One known-absent index (`testing/aarch64-pc-windows-msvc`) is explicitly recorded as absent when upstream returns 404.
+
+### Bulk rescue plan
+
+Generate a plan across all four product types in one canonical JSON output:
+
+```text
+uv run gel-registry rescue-plan --repo . --capture legacy-2026-08-bootstrap --bulk > plan.json
+```
+
+### One-off rescue plans
+
+```text
+# gel CLI, one version
+uv run gel-registry rescue-plan --repo . --capture legacy-2026-08-bootstrap \
+  --product cli --version 3.0.0 > plan.json
+
+# gel server, one version
+uv run gel-registry rescue-plan --repo . --capture legacy-2026-08-bootstrap \
+  --product server --version 4.1.2 > plan.json
+
+# language server, one version
+uv run gel-registry rescue-plan --repo . --capture legacy-2026-08-bootstrap \
+  --product ls --version 4.1.2 > plan.json
+
+# PostGIS extension, one server slot
+uv run gel-registry rescue-plan --repo . --capture legacy-2026-08-bootstrap \
+  --product postgis --slot 4.1 > plan.json
+```
+
+`--product cli|server|ls` each require exactly one `--version`; `--product postgis` requires exactly one `--slot`. `--bulk` takes neither.
+
+### Dry run and publication
+
+Run the full preflight to inspect every destination and print intended operations without mutating GitHub state:
+
+```text
+uv run gel-registry rescue-publish --plan plan.json --dry-run
+```
+
+Execute draft creation and artifact uploads:
+
+```text
+GITHUB_TOKEN=... uv run gel-registry rescue-publish --plan plan.json
+```
+
+### Review, manual publication, and promotion
+
+1. **Review drafts on GitHub**: Operators review each draft release created under `gelstable/gel`, `gelstable/gel-cli`, or `gelstable/gel-postgis`. Confirm that all expected original binary assets are present and `gel-registry.json` contains the expected canonical replacements.
+2. **Publish draft release**: When reviewed and approved, an operator manually publishes the draft release on GitHub.
+3. **Rolling promotion**: The standard promotion pipeline (`uv run gel-registry build-candidate --repo .` or `.github/scripts/promote.py`) discovers published non-draft releases, extracts `gel-registry.json`, validates that each replacement matches an immutable bootstrap digest, and promotes the replacements into candidate snapshots.
+
+### Streaming and resume behavior
+
+- **Streaming without temp files**: Every original artifact streams directly from `packages.edgedb.com` to GitHub draft release with bounded memory and zero temporary files. Exact byte length and SHA-256 digests are verified on transfer.
+- **Manifest uploaded last**: In each draft release, all binary assets are uploaded first. Only when all binaries are successfully uploaded is `gel-registry.json` generated and uploaded to the draft.
+- **Resumption from GitHub state**: Execution is fully idempotent and resumable purely from GitHub's reported state (no local journal). Complete matching releases are skipped. Missing binaries are uploaded first, followed by the manifest.
+- **Conflict detection and safety**: Preflight is all-or-nothing. It rejects published releases, duplicate asset names, incomplete uploads, and size/digest mismatches. An existing `gel-registry.json` claiming absent or conflicting binaries is rejected. Unrecognized extra assets (e.g. experimental `.zst` files) are permitted and never deleted.
+- **Reconciliation**: If an upload error leaves a partial asset behind on GitHub, `rescue-publish` inspects the release and reports the numeric asset ID for manual removal by an operator. Nothing is deleted automatically.
+
 ## Selection rollback
 
 Rollbacks update pointers without modifying historical snapshot files:
