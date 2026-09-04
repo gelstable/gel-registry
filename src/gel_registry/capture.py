@@ -15,7 +15,7 @@ import httpx
 from pydantic import ValidationError
 
 from . import storage
-from .constants import CAPTURE_ID, ORIGIN, capture_urls
+from .constants import CAPTURE_ID, ORIGIN, capture_urls, validate_capture_origin
 from .contracts import CaptureEntry, CaptureManifest, PackageIndex
 from .digest import Digests, canonical_json, hash_bytes, hash_file
 
@@ -44,15 +44,19 @@ class _Observed:
     body: bytes | None = None
 
 
-def _origin_url(value: str | httpx.URL) -> httpx.URL:
-    """Validate and return an HTTPS URL on the fixed package origin."""
+def _origin_url(value: str | httpx.URL, *, origin_url: str = ORIGIN) -> httpx.URL:
+    """Validate and return an HTTPS URL on the specified package origin."""
 
+    try:
+        origin_url = validate_capture_origin(origin_url)
+    except ValueError as exc:
+        raise CaptureError(str(exc)) from exc
     try:
         url = httpx.URL(value)
     except httpx.InvalidURL as exc:
         raise CaptureError(f"URL is malformed: {value!r}") from exc
     parsed = urlsplit(str(url))
-    origin = urlsplit(ORIGIN)
+    origin = urlsplit(origin_url)
     if parsed.scheme != "https" or parsed.hostname != origin.hostname:
         raise CaptureError(f"URL is outside the capture origin: {url}")
     if parsed.username is not None or parsed.password is not None:
@@ -117,10 +121,12 @@ def _fetch(
     *,
     conditional: tuple[str, str] | None = None,
     output_path: Path | None = None,
+    origin_url: str = ORIGIN,
+    reject_redirects: bool = False,
 ) -> _Observed:
-    """Fetch one URL, manually following only same-origin HTTPS redirects."""
+    """Fetch one URL, optionally rejecting every redirect."""
 
-    current = _origin_url(url)
+    current = _origin_url(url, origin_url=origin_url)
     for redirect_count in range(_MAX_REDIRECTS + 1):
         try:
             with client.stream(
@@ -130,10 +136,12 @@ def _fetch(
                 follow_redirects=False,
                 timeout=_REQUEST_TIMEOUT,
             ) as response:
-                response_url = _origin_url(response.url)
+                response_url = _origin_url(response.url, origin_url=origin_url)
                 current = response_url
                 status = response.status_code
                 if status in _REDIRECT_STATUSES:
+                    if reject_redirects:
+                        raise CaptureError(f"redirect rejected while fetching {url}")
                     location = response.headers.get("location")
                     if not location:
                         raise CaptureError(
@@ -143,7 +151,9 @@ def _fetch(
                         raise CaptureError(
                             f"redirect limit exceeded while fetching {url}"
                         )
-                    current = _origin_url(urljoin(str(response_url), location))
+                    current = _origin_url(
+                        urljoin(str(response_url), location), origin_url=origin_url
+                    )
                     continue
 
                 final_url = str(current)
