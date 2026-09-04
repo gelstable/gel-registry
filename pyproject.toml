@@ -12,7 +12,6 @@ dependencies = [
     "packaging>=25,<26",
     "pydantic>=2.11,<3",
     "tomli-w>=1.2,<2",
-    "zstandard>=0.23,<1",
 ]
 
 [project.scripts]
