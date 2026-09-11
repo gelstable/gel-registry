@@ -193,40 +193,6 @@
       "title": "PackageEntry",
       "type": "object"
     },
-    "ReleaseSource": {
-      "additionalProperties": false,
-      "description": "The GitHub release that authorizes direct index changes.",
-      "properties": {
-        "published_at": {
-          "format": "date-time",
-          "title": "Published At",
-          "type": "string"
-        },
-        "release_id": {
-          "exclusiveMinimum": 0,
-          "title": "Release Id",
-          "type": "integer"
-        },
-        "repository": {
-          "minLength": 1,
-          "title": "Repository",
-          "type": "string"
-        },
-        "tag": {
-          "minLength": 1,
-          "title": "Tag",
-          "type": "string"
-        }
-      },
-      "required": [
-        "repository",
-        "release_id",
-        "tag",
-        "published_at"
-      ],
-      "title": "ReleaseSource",
-      "type": "object"
-    },
     "Replacement": {
       "additionalProperties": false,
       "description": "A verified artifact digest and its replacement release URL.",
@@ -305,7 +271,7 @@
       ]
     }
   ],
-  "description": "A direct release manifest bound to one GitHub release.",
+  "description": "The direct package changes produced for one upstream release.",
   "properties": {
     "indexes": {
       "default": [],
@@ -328,14 +294,8 @@
       "default": 1,
       "title": "Schema Version",
       "type": "integer"
-    },
-    "source": {
-      "$ref": "#/$defs/ReleaseSource"
     }
   },
-  "required": [
-    "source"
-  ],
-  "title": "ReleaseRecord",
+  "title": "ReleaseManifest",
   "type": "object"
 }

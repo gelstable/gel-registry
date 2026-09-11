@@ -27,7 +27,12 @@ from support import (
 from gel_registry import __main__ as cli
 from gel_registry import storage
 from gel_registry.constants import CLI_PLATFORMS, LEGACY_PLATFORMS
-from gel_registry.contracts import PackageIndex, ReleaseRecord, RootManifest
+from gel_registry.contracts import (
+    IndexFragment,
+    PackageIndex,
+    ReleaseRecord,
+    RootManifest,
+)
 from gel_registry.digest import blob_id, canonical_json, snapshot_id
 from gel_registry.publication import (
     PublicationError,
@@ -49,6 +54,7 @@ MUTABLE_PATHS = (
     "public/v1/snapshots.json",
     "vercel.toml",
 )
+RELEASE_MANIFEST_SCHEMA = "public/v1/schema/release-manifest.json"
 RELEASE_RECORD_SCHEMA = "public/v1/schema/release-record.json"
 #: A moving root sits at ``public/``; a pinned root two levels below it. The
 #: leading slash a root-absolute URL would carry is what these exclude.
@@ -124,6 +130,7 @@ def test_publication_installs_exactly_the_generated_support_files(
                 "public/v1/schema/capture.json",
                 "public/v1/schema/package-index.json",
                 "public/v1/schema/pointer.json",
+                RELEASE_MANIFEST_SCHEMA,
                 RELEASE_RECORD_SCHEMA,
                 "public/v1/schema/root.json",
                 "public/v1/schema/snapshot-listing.json",
@@ -162,8 +169,6 @@ def test_publication_is_idempotent_and_composes_committed_releases(
     for platform in LEGACY_PLATFORMS:
         write_bootstrap(tmp_path, "stable", platform, [package(version="0.9.0")])
     release = copy_release(tmp_path, "1.0.0")
-    duplicate = tmp_path / "releases" / "gel-cli" / "duplicate.json"
-    duplicate.write_bytes(release.read_bytes())
 
     first = publish_bootstrap(tmp_path)
     before = _repo_bytes(tmp_path)
@@ -173,8 +178,8 @@ def test_publication_is_idempotent_and_composes_committed_releases(
     assert second.changed_paths == ()
     assert _repo_bytes(tmp_path) == before
 
-    # A committed release is composed into the platform indexes its artifacts
-    # name, and only those; the release file itself is an input, never output.
+    # A committed release is composed into the indexes it explicitly names;
+    # the release file itself is an input, never output.
     published = _published_indexes(tmp_path, first.snapshot)
     for (channel, platform), data in published.items():
         if channel != "stable":
@@ -185,22 +190,19 @@ def test_publication_is_idempotent_and_composes_committed_releases(
         assert ("1.0.0" in versions) is (platform in CLI_PLATFORMS)
     assert release.relative_to(tmp_path).as_posix() not in first.changed_paths
 
-    # Composition follows the record's own artifact platforms, so a product the
-    # legacy matrix never knew about still renders.
+    # Composition follows the record's own fragments, so an index the legacy
+    # matrix never knew about still renders.
     source = ReleaseRecord.model_validate_json(release.read_bytes())
-    # Remap one platform's artifacts rather than every platform's. Collapsing
-    # the whole matrix onto a single name would hand composition five identity
-    # artifacts for one platform, which is not a shape a release record is
-    # allowed to have.
     original = CLI_PLATFORMS[0]
+    fragment = next(index for index in source.indexes if index.platform == original)
     future = source.model_copy(
         update={
-            "product": "future-product",
-            "channel": "testing",
-            "artifacts": tuple(
-                artifact.model_copy(update={"platform": "future-x86_64"})
-                for artifact in source.artifacts
-                if artifact.platform == original
+            "indexes": (
+                IndexFragment(
+                    channel="testing",
+                    platform="future-x86_64",
+                    packages=fragment.packages,
+                ),
             ),
         }
     )
@@ -224,14 +226,13 @@ def test_publication_is_idempotent_and_composes_committed_releases(
         tuple(reversed(releases)),
     )
 
-    # promoted_at is provenance, not content: it reaches neither the rendered
+    # published_at is provenance, not content: it reaches neither the rendered
     # packages nor the snapshot identity.
     key = ("stable", "x86_64-unknown-linux-musl")
     rendered_bytes = published[key]
     data = json.loads(release.read_text())
-    data["promoted_at"] = "2036-08-15T12:00:00Z"
+    data["source"]["published_at"] = "2036-08-15T12:00:00Z"
     release.write_bytes(canonical_json(data))
-    duplicate.write_bytes(release.read_bytes())
     assert build_snapshot(tmp_path) == first.snapshot
     assert _published_indexes(tmp_path, first.snapshot)[key] == rendered_bytes
     assert b"2036-08-15" not in rendered_bytes
@@ -243,7 +244,7 @@ def test_the_pointer_alone_selects_which_snapshot_the_moving_documents_serve(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _write_index(tmp_path, package_index_data)
-    copy_release(tmp_path, "1.0.0")
+    release = copy_release(tmp_path, "1.0.0")
 
     # Building a snapshot neither reads nor writes the pointer.
     unreadable = tmp_path / "pointers" / "latest.json"
@@ -256,7 +257,7 @@ def test_the_pointer_alone_selects_which_snapshot_the_moving_documents_serve(
     assert not (tmp_path / "public" / "registry.json").exists()
     assert not (tmp_path / "public" / "v1" / "snapshots.json").exists()
 
-    (tmp_path / "releases" / "gel-cli" / "1.0.0.json").unlink()
+    release.unlink()
     copy_release(tmp_path, "2.0.0")
     new = build_snapshot(tmp_path)
     assert old != new
@@ -319,8 +320,9 @@ def _support_schema_drift(repo: Path) -> None:
 def _contested_release_identity(repo: Path) -> None:
     release = copy_release(repo)
     data = json.loads(release.read_bytes())
-    data["artifacts"][0]["sha256"] = "e" * 64
-    (repo / "releases" / "gel-cli" / "duplicate.json").write_bytes(canonical_json(data))
+    data["source"]["release_id"] = 101
+    data["indexes"][0]["packages"][0]["revision"] = "2"
+    (release.parent / "101.json").write_bytes(canonical_json(data))
 
 
 def _symlinked_snapshot_parent(repo: Path) -> None:

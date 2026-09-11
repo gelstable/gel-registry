@@ -1,0 +1,8 @@
+{
+  "repositories": [
+    "gelstable/gel",
+    "gelstable/gel-cli",
+    "gelstable/gel-postgis"
+  ],
+  "schema_version": 1
+}

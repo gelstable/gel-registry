@@ -10,13 +10,21 @@ class RenderError(RuntimeError):
 class ContestedIdentityError(RenderError):
     """Raised when one package identity has different serialized entries."""
 
-    def __init__(self, identity: tuple[str, str, str]) -> None:
+    def __init__(self, identity: tuple[str, ...]) -> None:
         self.identity = identity
-        basename, version, slot = identity
+        super().__init__(f"contested package identity {identity!r}")
+
+
+class ContestedReplacementError(RenderError):
+    """Raised when multiple release records claim the same replacement digest."""
+
+    def __init__(self, sha256: str, sources: tuple[str, ...]) -> None:
+        self.sha256 = sha256
+        self.sources = sources
+        sources_desc = ", ".join(sources)
         super().__init__(
-            "contested package identity "
-            f"(basename={basename!r}, version={version!r}, slot={slot!r})"
+            f"contested replacement digest {sha256}: claimed by {sources_desc}"
         )
 
 
-__all__ = ["ContestedIdentityError", "RenderError"]
+__all__ = ["ContestedIdentityError", "ContestedReplacementError", "RenderError"]

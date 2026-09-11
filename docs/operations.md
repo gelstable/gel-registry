@@ -109,6 +109,67 @@ uv run gel-registry normalize --repo . --check
 uv run gel-registry validate --repo .
 ```
 
+## Candidate building & rolling promotion
+
+Candidate releases are gathered and staged automatically via the rolling promotion pipeline (see `docs/rolling-promotion.md`).
+
+### Building a candidate locally
+
+To scan allowlisted upstream repositories (`sources/github.json`), gather missing non-draft release manifests, write immutable records under `releases/<owner>/<repo>/<id>.json`, and publish a candidate snapshot locally:
+
+```text
+uv run gel-registry build-candidate --repo .
+```
+
+The command outputs a single JSON object to stdout detailing the newly rendered snapshot ID, added release record paths, and any deterministically rejected releases.
+
+### Rolling promotion pull request
+
+The production promotion pipeline is scheduled in `.github/workflows/promote.yml` and executed by `.github/scripts/promote.py`:
+- Rebuilds candidate branch `promote/registry` fresh from `origin/main`.
+- Enforces the core invariant: candidate = current `main` + all eligible unmerged releases.
+- Pushes with lease protection: `--force-with-lease=refs/heads/promote/registry:<observed-oid>`.
+- Maintains a single rolling PR titled `data: promote registry releases`.
+- Runs with `cancel-in-progress: false` to avoid mid-run interruptions.
+
+### Operational recovery
+
+Because candidate construction is completely disposable and deterministically reconstructed from `main` + upstream APIs:
+- If a candidate branch is broken, has conflicting merges, or suffers a push-lease race, **do not manually rebase or edit `promote/registry`**.
+- Trigger the workflow again via GitHub Actions (`workflow_dispatch`), or re-run `python .github/scripts/promote.py` from a clean checkout of `main`.
+
+## Publication transaction (`publish_registry`)
+
+The publication transaction (`gel_registry.publication.publish_registry`, also accessible via CLI alias `uv run gel-registry publish-bootstrap --repo .`) atomically renders:
+- Package indexes composed from frozen `bootstrap/` and immutable records under `releases/`.
+- Content-addressed blob files under `public/i/<blob-id>.json`.
+- Pinned snapshot registry manifests under `public/s/<snapshot-id>/registry.json`.
+- Moving roots `public/registry.json` and `public/v1/snapshots.json`.
+- Public JSON Schemas under `public/v1/schema/`.
+- Hosting configuration in `vercel.toml`.
+- Pointer file `pointers/latest.json`.
+
+All file writes are atomic, symlinks are rejected, and non-whitelisted paths are barred from mutation.
+
+## Public JSON Schema generation
+
+Public schemas for all registry documents are maintained under `public/v1/schema/`:
+- `release-manifest.json`: Public schema for publisher `gel-registry.json` manifests (see `docs/release-manifest.md`).
+- `release-record.json`: Schema for committed records in `releases/`.
+- `package-index.json`, `capture.json`, `pointer.json`, `root.json`, `snapshot-listing.json`.
+
+Regenerate schemas without modifying snapshots:
+
+```text
+uv run python -c "from pathlib import Path; from gel_registry.render.schemas import render_schemas; render_schemas(Path('.'))"
+```
+
+Verify schemas and snapshots offline:
+
+```text
+uv run gel-registry validate --repo .
+```
+
 ## Selection rollback
 
 Rollbacks update pointers without modifying historical snapshot files:

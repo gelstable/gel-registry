@@ -6,14 +6,14 @@ phase can be read without the builders of another.
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from gel_registry.constants import capture_urls
+from gel_registry.constants import CLI_PLATFORMS, capture_urls
 from gel_registry.contracts import (
     CaptureEntry,
     CaptureManifest,
+    IndexFragment,
     PackageIndex,
     Pointer,
     ReleaseRecord,
@@ -79,23 +79,43 @@ def write_bootstrap(
 
 
 def fixture_release(version: str = "1.0.0") -> ReleaseRecord:
-    """The committed example release record, re-versioned in memory."""
+    """A direct release record adding one publisher package per CLI platform."""
 
-    source = FIXTURES / "releases" / "gel-cli" / "1.0.0.json"
-    data = json.loads(source.read_text())
-    data["version"] = version
-    data["source"]["release_tag"] = f"v{version}"
-    data["artifacts"] = [
-        {**artifact, "url": artifact["url"].replace("v1.0.0", f"v{version}")}
-        for artifact in data["artifacts"]
-    ]
-    return ReleaseRecord.model_validate(data)
+    tag = f"v{version}"
+    prefix = f"https://github.com/gelstable/gel-cli/releases/download/{tag}/"
+    fragments = []
+    for platform in CLI_PLATFORMS:
+        entry = package(basename="gel-cli", version=version, ref_suffix=platform)
+        entry["architecture"] = platform.split("-", 1)[0]
+        entry["installref"] = prefix + f"gel-cli-{platform}"
+        entry["installrefs"] = [
+            {
+                "ref": entry["installref"],
+                "type": "application/octet-stream",
+                "encoding": "identity",
+                "verification": verification(),
+            }
+        ]
+        fragments.append(
+            IndexFragment(channel="stable", platform=platform, packages=(entry,))
+        )
+    return ReleaseRecord(
+        source={
+            "repository": "gelstable/gel-cli",
+            "release_id": 100,
+            "tag": tag,
+            "published_at": CAPTURED_AT,
+        },
+        indexes=tuple(fragments),
+    )
 
 
 def copy_release(repo: Path, version: str = "1.0.0") -> Path:
-    path = repo / "releases" / "gel-cli" / f"{version}.json"
+    record = fixture_release(version)
+    owner, repository = record.source.repository.split("/")
+    path = repo / "releases" / owner / repository / f"{record.source.release_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(canonical_json(fixture_release(version)))
+    path.write_bytes(canonical_json(record))
     return path
 
 

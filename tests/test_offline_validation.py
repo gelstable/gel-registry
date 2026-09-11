@@ -75,6 +75,38 @@ def test_local_validation_is_offline_and_checks_every_layer(
     assert capsys.readouterr().out == "ok\n"
 
 
+def test_release_records_use_their_source_identity_path(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    """A release path names the source owner, repository, and release ID."""
+    release = copy_release(tmp_path)
+
+    assert release.relative_to(tmp_path) == Path("releases/gelstable/gel-cli/100.json")
+
+    complete_repository(tmp_path, package_index_data)
+    report = validate_local(tmp_path)
+
+    assert report.ok, report.errors
+
+
+def test_validation_rejects_a_release_path_that_disagrees_with_its_source(
+    tmp_path: Path, package_index_data: dict[str, object]
+) -> None:
+    """The directory names cannot claim a different GitHub source."""
+    release = copy_release(tmp_path)
+    complete_repository(tmp_path, package_index_data)
+    wrong_path = tmp_path / "releases" / "other-owner" / "gel-cli" / "100.json"
+    wrong_path.parent.mkdir(parents=True)
+    release.rename(wrong_path)
+
+    report = validate_local(tmp_path)
+
+    assert any(
+        "release record path does not match its source" in error
+        for error in report.errors
+    )
+
+
 def test_local_validation_names_the_immutable_input_that_changed(
     tmp_path: Path, package_index_data: dict[str, object]
 ) -> None:

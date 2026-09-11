@@ -13,6 +13,7 @@ from ..contracts import (
     CaptureManifest,
     PackageIndex,
     Pointer,
+    ReleaseManifest,
     ReleaseRecord,
     RootManifest,
     SnapshotListing,
@@ -24,6 +25,7 @@ from .support import canonical_error, capture_root, display_path, read_file, tre
 _SCHEMA_MODELS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("capture.json", CaptureManifest),
     ("package-index.json", PackageIndex),
+    ("release-manifest.json", ReleaseManifest),
     ("release-record.json", ReleaseRecord),
     ("pointer.json", Pointer),
     ("root.json", RootManifest),
@@ -221,7 +223,7 @@ def check_releases(repo: Path, collector: Collector) -> None:
     for relative, raw in sorted(files.items()):
         path = root / relative
         pieces = Path(relative).parts
-        if len(pieces) != 2 or not relative.endswith(".json"):
+        if len(pieces) != 3 or not relative.endswith(".json"):
             collector.add(
                 check, display_path(repo, path), "unexpected release record path"
             )
@@ -234,17 +236,16 @@ def check_releases(repo: Path, collector: Collector) -> None:
         canonical_issue = canonical_error(raw, record)
         if canonical_issue is not None:
             collector.add(check, display_path(repo, path), canonical_issue)
-        if pieces[0] != record.product:
+        owner_and_repository = record.source.repository.split("/")
+        if (
+            len(owner_and_repository) != 2
+            or tuple(pieces[:2]) != tuple(owner_and_repository)
+            or Path(pieces[-1]).stem != str(record.source.release_id)
+        ):
             collector.add(
                 check,
                 display_path(repo, path),
-                "release record path does not match its product",
-            )
-        if Path(pieces[-1]).stem != record.version:
-            collector.add(
-                check,
-                display_path(repo, path),
-                "record filename does not match its version",
+                "release record path does not match its source",
             )
 
 

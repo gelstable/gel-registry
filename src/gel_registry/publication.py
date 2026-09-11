@@ -1,4 +1,4 @@
-"""Bootstrap-only publication transaction.
+"""Registry publication transaction.
 
 The transaction stages the repository inputs, renders the resulting immutable
 snapshot and moving documents, then installs only the byte differences.  It
@@ -53,6 +53,7 @@ _SUPPORT_PATHS = frozenset(
         "public/v1/schema/capture.json",
         "public/v1/schema/package-index.json",
         "public/v1/schema/pointer.json",
+        "public/v1/schema/release-manifest.json",
         "public/v1/schema/release-record.json",
         "public/v1/schema/root.json",
         "public/v1/schema/snapshot-listing.json",
@@ -74,8 +75,8 @@ class PublicationResult:
     changed_paths: tuple[str, ...]
 
 
-def publish_bootstrap(repo: Path) -> PublicationResult:
-    """Build, select, and install a bootstrap-backed immutable snapshot."""
+def publish_registry(repo: Path) -> PublicationResult:
+    """Build, select, and install an immutable registry snapshot."""
 
     repo = Path(repo)
     _validate_repository(repo)
@@ -93,7 +94,7 @@ def publish_bootstrap(repo: Path) -> PublicationResult:
     except (PublicationError, RenderError):
         raise
     except (OSError, TypeError, ValidationError, ValueError) as exc:
-        raise PublicationError(f"bootstrap publication failed: {exc}") from exc
+        raise PublicationError(f"registry publication failed: {exc}") from exc
     finally:
         shutil.rmtree(stage, ignore_errors=True)
 
@@ -508,4 +509,12 @@ def _install_transaction(repo: Path, stage: Path, changed_paths: Iterable[str]) 
         raise
 
 
-__all__ = ["PublicationError", "PublicationResult", "publish_bootstrap"]
+publish_bootstrap = publish_registry
+
+
+__all__ = [
+    "PublicationError",
+    "PublicationResult",
+    "publish_bootstrap",
+    "publish_registry",
+]
