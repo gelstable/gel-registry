@@ -16,7 +16,11 @@ import httpx
 from . import candidate, capture, normalize, publication, render, validation
 from .constants import CAPTURE_ID
 from .contracts import CaptureManifest
+from .digest import canonical_json
 from .github import create_github_client
+from .rescue import load_plan, publish_plan
+from .rescue.indexes import capture_rescue_indexes
+from .rescue.selection import GitHubTagSource, GitTagSource, plan_rescue
 
 type Handler = Callable[[argparse.Namespace], int]
 
@@ -76,6 +80,46 @@ def _run_capture(args: argparse.Namespace) -> int:
     with httpx.Client() as client:
         manifest = capture.capture_legacy(client, destination, args.captured_at)
     print(manifest.capture)
+    return 0
+
+
+def _run_rescue_capture(args: argparse.Namespace) -> int:
+    with httpx.Client() as client:
+        manifest = capture_rescue_indexes(client, Path(args.repo), args.captured_at)
+    print(manifest.capture)
+    return 0
+
+
+def _run_rescue_plan(args: argparse.Namespace) -> int:
+    if args.tag_source == "git":
+        plan = plan_rescue(
+            Path(args.repo),
+            capture=args.capture,
+            product=args.product,
+            version=args.version,
+            slot=args.slot,
+            tag_source=GitTagSource(),
+        )
+    else:
+        with create_github_client() as client:
+            plan = plan_rescue(
+                Path(args.repo),
+                capture=args.capture,
+                product=args.product,
+                version=args.version,
+                slot=args.slot,
+                tag_source=GitHubTagSource(client),
+            )
+    sys.stdout.buffer.write(canonical_json(plan))
+    return 0
+
+
+def _run_rescue_publish(args: argparse.Namespace) -> int:
+    plan = load_plan(Path(args.plan))
+    with create_github_client() as client:
+        lines = publish_plan(client, plan, dry_run=bool(args.dry_run))
+    for line in lines:
+        print(line)
     return 0
 
 
@@ -175,6 +219,52 @@ def _build_parser() -> argparse.ArgumentParser:
         help="one RFC3339 UTC timestamp for this capture attempt",
     )
     capture_parser.set_defaults(handler=_run_capture)
+
+    rescue_capture_parser = commands.add_parser(
+        "rescue-capture", help="capture legacy indexes from packages.edgedb.com"
+    )
+    _add_repo(rescue_capture_parser)
+    rescue_capture_parser.add_argument(
+        "--captured-at",
+        type=_parse_captured_at,
+        required=True,
+        help="one RFC3339 UTC timestamp for this rescue capture attempt",
+    )
+    rescue_capture_parser.set_defaults(handler=_run_rescue_capture)
+
+    rescue_plan_parser = commands.add_parser(
+        "rescue-plan", help="select a read-only canonical rescue release plan"
+    )
+    _add_repo(rescue_plan_parser)
+    rescue_plan_parser.add_argument("--capture", required=True)
+    mode = rescue_plan_parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--bulk", action="store_true")
+    mode.add_argument("--product", choices=("cli", "server", "ls", "postgis"))
+    rescue_plan_parser.add_argument("--version")
+    rescue_plan_parser.add_argument("--slot")
+    rescue_plan_parser.add_argument(
+        "--tag-source",
+        choices=("git", "github"),
+        default="git",
+        help=(
+            "how upstream tags are read: 'git' runs one ls-remote per "
+            "repository (default, no token, no REST rate limit); 'github' "
+            "uses the REST API"
+        ),
+    )
+    rescue_plan_parser.set_defaults(handler=_run_rescue_plan)
+
+    rescue_publish_parser = commands.add_parser(
+        "rescue-publish",
+        help="create draft releases and upload rescued assets",
+    )
+    rescue_publish_parser.add_argument("--plan", required=True, type=Path)
+    rescue_publish_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="run the full preflight and print intended operations only",
+    )
+    rescue_publish_parser.set_defaults(handler=_run_rescue_publish)
 
     live_parser = commands.add_parser(
         "verify-capture-live", help="explicitly rehearse the capture remotely"

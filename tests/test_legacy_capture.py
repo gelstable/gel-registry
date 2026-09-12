@@ -20,7 +20,12 @@ from pytest_httpx import HTTPXMock
 
 from gel_registry import __main__ as cli
 from gel_registry import storage
-from gel_registry.capture import CaptureError, capture_legacy, verify_live_capture
+from gel_registry.capture import (
+    CaptureError,
+    _origin_url,
+    capture_legacy,
+    verify_live_capture,
+)
 from gel_registry.constants import CAPTURE_ID, ORIGIN, capture_urls
 from gel_registry.contracts import CaptureEntry, CaptureManifest
 from gel_registry.digest import canonical_json
@@ -29,6 +34,17 @@ CAPTURED_AT = datetime(2026, 8, 15, 12, 34, 56, tzinfo=UTC)
 USER_AGENT = "gel-registry-importer/1"
 
 Setup = Callable[[HTTPXMock, pytest.MonkeyPatch, Path, bytes], None]
+
+
+def test_capture_origin_configuration_rejects_unapproved_hosts_before_fetching() -> (
+    None
+):
+    """Removing the allowlist must not permit capture requests to arbitrary hosts."""
+
+    with pytest.raises(CaptureError, match="allowlisted"):
+        _origin_url("https://example.com/index.json", origin_url="https://example.com")
+    with pytest.raises(ValueError, match="allowlisted"):
+        capture_urls(origin="https://example.com")
 
 
 def _index_bytes(package_index_data: dict[str, object], *, pretty: bool) -> bytes:
