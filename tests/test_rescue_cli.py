@@ -127,6 +127,8 @@ def test_rescue_publish_dry_run_prints_operations_and_mutates_nothing(
         requests.append((request.method, str(request.url)))
         if request.url.host == "packages.edgedb.com":
             return httpx.Response(200)
+        if request.url.path.endswith("/releases"):
+            return httpx.Response(200, json=[])
         return httpx.Response(404)
 
     monkeypatch.setattr(
@@ -152,7 +154,7 @@ def test_rescue_publish_dry_run_prints_operations_and_mutates_nothing(
     assert "dry run: no releases or assets were created" in output
     assert "create draft release gelstable/gel@legacy-v7" in output
     assert "total uploads: 2" in output
-    assert [method for method, _ in requests] == ["GET", "HEAD"]
+    assert [method for method, _ in requests] == ["GET", "GET", "HEAD"]
 
 
 def test_rescue_publish_reports_a_preflight_conflict_as_a_failure(
