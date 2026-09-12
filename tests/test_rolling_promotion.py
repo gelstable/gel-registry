@@ -134,6 +134,26 @@ def test_candidate_push_uses_the_observed_remote_oid_as_a_force_with_lease(
     ] in recorder.commands
 
 
+def test_candidate_commit_uses_github_actions_bot_identity(
+    promote: PromotionScript,
+) -> None:
+    """The workflow can commit from a clean Actions checkout."""
+    recorder = Recorder(_responses())
+
+    promote.main(run=recorder)
+
+    assert [
+        "git",
+        "-c",
+        "user.name=github-actions[bot]",
+        "-c",
+        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+        "commit",
+        "-m",
+        "data: promote registry releases",
+    ] in recorder.commands
+
+
 def test_unexpected_candidate_path_aborts_before_commit_or_push(
     promote: PromotionScript,
 ) -> None:
