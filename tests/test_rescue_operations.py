@@ -161,6 +161,8 @@ class _Github:
             if self._uploaded and self.assets_after_upload is not None:
                 listing = self.assets_after_upload
             return httpx.Response(200, json=listing)
+        if request.url.path.endswith("/releases"):
+            return httpx.Response(200, json=[])
         if self.release is None:
             return httpx.Response(404)
         return httpx.Response(200, json=self.release)

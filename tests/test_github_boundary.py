@@ -52,8 +52,10 @@ def test_draft_release_operations_use_fixed_transport_and_blank_body() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        if request.method == "GET":
+        if request.method == "GET" and "/tags/" in request.url.path:
             return httpx.Response(404)
+        if request.method == "GET":
+            return httpx.Response(200, json=[])
         assert request.method == "POST"
         assert json.loads(request.content) == {
             "body": "",
@@ -72,10 +74,55 @@ def test_draft_release_operations_use_fixed_transport_and_blank_body() -> None:
     assert [request.url.path for request in seen] == [
         f"/repos/{REPOSITORY}/releases/tags/legacy-v7",
         f"/repos/{REPOSITORY}/releases",
+        f"/repos/{REPOSITORY}/releases",
     ]
     for request in seen:
         assert request.headers["Accept"] == "application/vnd.github+json"
         assert request.headers["X-GitHub-Api-Version"] == "2022-11-28"
+
+
+def test_get_release_by_tag_finds_a_draft_in_the_paginated_release_listing() -> None:
+    requests: list[httpx.Request] = []
+    other_release = _release()
+    other_release["tag_name"] = "other-tag"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if "/tags/" in request.url.path:
+            return httpx.Response(404)
+        page = request.url.params.get("page")
+        if page == "1":
+            return httpx.Response(200, json=[other_release] * 100)
+        return httpx.Response(200, json=[_release()])
+
+    with _client(httpx.MockTransport(handler)) as client:
+        release = get_release_by_tag(client, REPOSITORY, "legacy-v7")
+
+    assert release is not None
+    assert release.draft
+    assert release.tag_name == "legacy-v7"
+    observed_pages = [
+        (request.url.path, request.url.params.get("page")) for request in requests
+    ]
+    assert observed_pages == [
+        (f"/repos/{REPOSITORY}/releases/tags/legacy-v7", None),
+        (f"/repos/{REPOSITORY}/releases", "1"),
+        (f"/repos/{REPOSITORY}/releases", "2"),
+    ]
+    assert all(request.url.params.get("per_page") == "100" for request in requests[1:])
+
+
+def test_get_release_by_tag_rejects_duplicate_drafts_in_release_listing() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/tags/" in request.url.path:
+            return httpx.Response(404)
+        return httpx.Response(200, json=[_release(), _release()])
+
+    with (
+        _client(httpx.MockTransport(handler)) as client,
+        pytest.raises(GitHubError, match="multiple releases"),
+    ):
+        get_release_by_tag(client, REPOSITORY, "legacy-v7")
 
 
 def test_create_rejects_nonblank_body_and_non_draft_response() -> None:

@@ -23,7 +23,7 @@ from .transport import API_HEADERS, GITHUB_API, REQUEST_TIMEOUT
 def get_release_by_tag(
     client: httpx.Client, repository: str, tag: str
 ) -> GitHubRelease | None:
-    """Fetch one release by tag, returning ``None`` only for an exact 404."""
+    """Fetch one release by tag, including drafts omitted by the tag endpoint."""
 
     repository = validate_repository(repository)
     if not tag:
@@ -31,12 +31,47 @@ def get_release_by_tag(
     endpoint = f"{GITHUB_API}/repos/{repository}/releases/tags/{quote(tag, safe='')}"
     response = _request(client, "GET", endpoint)
     if response.status_code == 404:
-        return None
+        return _find_release_in_listing(client, repository, tag)
     _require_status(response, 200, "GitHub release lookup")
     release = _parse_release(response, repository)
     if release.tag_name != tag:
         raise GitHubError("GitHub release lookup returned an unexpected tag")
     return release
+
+
+def _find_release_in_listing(
+    client: httpx.Client, repository: str, tag: str
+) -> GitHubRelease | None:
+    """Find exactly one tag match in the draft-inclusive releases listing."""
+
+    endpoint = f"{GITHUB_API}/repos/{repository}/releases"
+    match: GitHubRelease | None = None
+    for page in range(1, 10_001):
+        response = _request(
+            client,
+            "GET",
+            endpoint,
+            params={"per_page": "100", "page": str(page)},
+        )
+        _require_status(response, 200, "GitHub release listing")
+        payload = _json(response, "GitHub release listing")
+        if not isinstance(payload, list):
+            raise GitHubError("GitHub release listing was not a JSON array")
+        for value in payload:
+            release = _parse_release_payload(
+                value, repository, "GitHub release listing"
+            )
+            if release.tag_name != tag:
+                continue
+            if match is not None:
+                raise GitHubError(
+                    "GitHub release listing found multiple releases with the "
+                    "requested tag"
+                )
+            match = release
+        if len(payload) < 100:
+            return match
+    raise GitHubError("GitHub release pagination exceeded the safety limit")
 
 
 def create_draft_release(
@@ -185,13 +220,21 @@ def _parse_release(response: httpx.Response, repository: str) -> GitHubRelease:
     payload = _json(response, "GitHub release response")
     if not isinstance(payload, Mapping):
         raise GitHubError("GitHub release response was not a JSON object")
+    return _parse_release_payload(payload, repository, "GitHub release response")
+
+
+def _parse_release_payload(
+    payload: object, repository: str, operation: str
+) -> GitHubRelease:
+    if not isinstance(payload, Mapping):
+        raise GitHubError(f"{operation} contained a non-object release")
     explicit_repository = repository_from_payload(payload)
     if explicit_repository is not None and explicit_repository != repository:
         raise GitHubError("GitHub release response switches repository")
     try:
         release = GitHubRelease.model_validate(payload)
     except ValidationError as exc:
-        raise GitHubError(f"invalid GitHub release response: {exc}") from exc
+        raise GitHubError(f"invalid {operation.lower()}: {exc}") from exc
     _validate_release(release, repository)
     return release.model_copy(update={"repository": repository})
 
