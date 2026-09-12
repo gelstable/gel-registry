@@ -46,6 +46,10 @@ def _candidate_from_main(
     return main_identities | {_identity(release) for release in upstream}
 
 
+def _is_git_subcommand(command: list[str], subcommand: str) -> bool:
+    return bool(command) and command[0] == "git" and subcommand in command[1:]
+
+
 def test_second_fresh_candidate_contains_release_a_and_new_release_b() -> None:
     """A waiting PR cannot hide an earlier release from the next run."""
     release_a = {"repository": "gelstable/gel", "id": 101}
@@ -57,6 +61,23 @@ def test_second_fresh_candidate_contains_release_a_and_new_release_b() -> None:
 
     second = _candidate_from_main(main, [release_a, release_b])
     assert second == {_identity(release_a), _identity(release_b)}
+
+
+def test_git_subcommand_recognizes_command_local_config() -> None:
+    """Commit guards must recognize a command that supplies Git config."""
+    assert _is_git_subcommand(
+        [
+            "git",
+            "-c",
+            "user.name=github-actions[bot]",
+            "-c",
+            "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+            "commit",
+            "-m",
+            "message",
+        ],
+        "commit",
+    )
 
 
 class Recorder:
@@ -163,7 +184,9 @@ def test_unexpected_candidate_path_aborts_before_commit_or_push(
     with pytest.raises(RuntimeError, match="unexpected candidate path"):
         promote.main(run=recorder)
 
-    assert not any(command[:2] == ["git", "commit"] for command in recorder.commands)
+    assert not any(
+        _is_git_subcommand(command, "commit") for command in recorder.commands
+    )
     assert not any(command[:2] == ["git", "push"] for command in recorder.commands)
 
 
@@ -229,7 +252,9 @@ def test_no_changes_deletes_candidate_branch_and_closes_open_pr(
         ":refs/heads/promote/registry",
     ] in recorder.commands
     assert ["gh", "pr", "close", "42"] in recorder.commands
-    assert not any(command[:2] == ["git", "commit"] for command in recorder.commands)
+    assert not any(
+        _is_git_subcommand(command, "commit") for command in recorder.commands
+    )
 
 
 def test_candidate_updates_existing_open_pr(
@@ -507,7 +532,16 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
             "--name-only",
             "--cached",
         ): "releases/gelstable/gel-cli/101.json\n",
-        ("git", "commit", "-m", "data: promote registry releases"): "",
+        (
+            "git",
+            "-c",
+            "user.name=github-actions[bot]",
+            "-c",
+            "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+            "commit",
+            "-m",
+            "data: promote registry releases",
+        ): "",
         ("git", "diff", "--name-only", "--diff-filter=A", "origin/main...HEAD"): (
             "releases/gelstable/gel-cli/101.json\n"
         ),
@@ -591,7 +625,16 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
         ("git", "diff", "--name-only", "--cached"): (
             "releases/gelstable/gel-cli/101.json\nreleases/gelstable/gel/202.json\n"
         ),
-        ("git", "commit", "-m", "data: promote registry releases"): "",
+        (
+            "git",
+            "-c",
+            "user.name=github-actions[bot]",
+            "-c",
+            "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+            "commit",
+            "-m",
+            "data: promote registry releases",
+        ): "",
         ("git", "diff", "--name-only", "--diff-filter=A", "origin/main...HEAD"): (
             "releases/gelstable/gel-cli/101.json\nreleases/gelstable/gel/202.json\n"
         ),
@@ -651,6 +694,6 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
     with pytest.raises(RuntimeError, match="duplicate replacement claim"):
         promote.main(run=recorder3)
 
-    assert not any(cmd[:2] == ["git", "commit"] for cmd in recorder3.commands)
+    assert not any(_is_git_subcommand(cmd, "commit") for cmd in recorder3.commands)
     assert not any(cmd[:2] == ["git", "push"] for cmd in recorder3.commands)
     assert not any(cmd[:3] == ["gh", "pr"] for cmd in recorder3.commands)
