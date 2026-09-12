@@ -1,0 +1,200 @@
+{
+  "absent": [
+    {
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "observed_status": 404,
+      "platform": "aarch64-pc-windows-msvc",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-pc-windows-msvc.testing.json"
+    }
+  ],
+  "capture": "legacy-2026-08-bootstrap",
+  "captured_at": "2026-08-31T00:00:00Z",
+  "indexes": [
+    {
+      "byte_size": 115538,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "x86_64-unknown-linux-gnu",
+      "sha256": "66821ff259d7fc57dcfbbcd731647b74fcdb1f2a77f4aa8cdb0f92b328ab912a",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-unknown-linux-gnu.json"
+    },
+    {
+      "byte_size": 216492,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "x86_64-unknown-linux-musl",
+      "sha256": "c9de6187ac1229c3b7b131cb7e48f14af1d044ee21f943ac4c9f2e866442b5bf",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-unknown-linux-musl.json"
+    },
+    {
+      "byte_size": 96833,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "aarch64-unknown-linux-gnu",
+      "sha256": "e592ca39d9546df0dab7f97201ad827c0ed852d0af73e1ac3c31fd131e19dda1",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-unknown-linux-gnu.json"
+    },
+    {
+      "byte_size": 199379,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "aarch64-unknown-linux-musl",
+      "sha256": "beeebd51ac7a11bee898a05b5c0dbc5c83f00ac645c48c9d70b4601228c27d30",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-unknown-linux-musl.json"
+    },
+    {
+      "byte_size": 216828,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "x86_64-apple-darwin",
+      "sha256": "6fa1ca75e50fb5e1b9fc6a16da467314a924386a73a710b104d8abbb86a5126f",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-apple-darwin.json"
+    },
+    {
+      "byte_size": 188865,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "aarch64-apple-darwin",
+      "sha256": "bd6b786bf992744fe09467dc90f9793b8136ee0095f7d650d8be67dbd7615c47",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-apple-darwin.json"
+    },
+    {
+      "byte_size": 123033,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "x86_64-pc-windows-msvc",
+      "sha256": "5dc093f1db49d98367798d9cbfd90985f48f78e8435a2de4bb683fd8fe9d86b2",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-pc-windows-msvc.json"
+    },
+    {
+      "byte_size": 12363,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "stable",
+      "platform": "aarch64-pc-windows-msvc",
+      "sha256": "4c108b76a2ef9537bfaae2a6383b95a32b2a7c32119a9b776f58630bc1d2c8ee",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-pc-windows-msvc.json"
+    },
+    {
+      "byte_size": 52084,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "platform": "x86_64-unknown-linux-gnu",
+      "sha256": "e685bfc478bb6a720ecfbc2874dfee699849a8bbc4d3aba2b7a5015990a9c7a4",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-unknown-linux-gnu.testing.json"
+    },
+    {
+      "byte_size": 76678,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "platform": "x86_64-unknown-linux-musl",
+      "sha256": "cfcaf6b6d3a2ccc7f1aa6bb29c6f2e52c13109505013de0bc8ffb581523d6ac2",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-unknown-linux-musl.testing.json"
+    },
+    {
+      "byte_size": 56717,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "platform": "aarch64-unknown-linux-gnu",
+      "sha256": "d612ef5bafe07d7b7776cedf60e22c08d5b25c7c1179b5d6fdc1d579593fb895",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-unknown-linux-gnu.testing.json"
+    },
+    {
+      "byte_size": 73856,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "platform": "aarch64-unknown-linux-musl",
+      "sha256": "23adc5a1303b7c4bf7b03718423b629f8f19c71eb57ebbf7f06c8b08e0b2c68f",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-unknown-linux-musl.testing.json"
+    },
+    {
+      "byte_size": 67474,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "platform": "x86_64-apple-darwin",
+      "sha256": "9b85edfc5decb672bdc80ac332a82fec4cf9198019307162311f828ce6b0667b",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-apple-darwin.testing.json"
+    },
+    {
+      "byte_size": 72668,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "platform": "aarch64-apple-darwin",
+      "sha256": "eee674f9539914330ba54a2853fdb95aa4ae935d9a1c7a979bbed020264554e2",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-apple-darwin.testing.json"
+    },
+    {
+      "byte_size": 19845,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "testing",
+      "platform": "x86_64-pc-windows-msvc",
+      "sha256": "2989ff8626537cf189a9fd8aa5be651b2323e4da719aa77455d79b87a7bac043",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-pc-windows-msvc.testing.json"
+    },
+    {
+      "byte_size": 588092,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "x86_64-unknown-linux-gnu",
+      "sha256": "482e04a3261c3895aa33086d476d3f8c1a49ba115671810385c1651ac51966bb",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-unknown-linux-gnu.nightly.json"
+    },
+    {
+      "byte_size": 512980,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "x86_64-unknown-linux-musl",
+      "sha256": "9fc7030f6452e25d6425d1e55c3c3fadd3e1fe8baad7b06a5b95385d1c2558d8",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-unknown-linux-musl.nightly.json"
+    },
+    {
+      "byte_size": 515912,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "aarch64-unknown-linux-gnu",
+      "sha256": "736e69c8e1eb41712f2ea04b7eef559917353d41a0b446c0f715a09795164667",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-unknown-linux-gnu.nightly.json"
+    },
+    {
+      "byte_size": 514323,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "aarch64-unknown-linux-musl",
+      "sha256": "922f7d531ca3d8c23fc82729a51d448d612c25e041a1f2beee1bb3ec2dfde12e",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-unknown-linux-musl.nightly.json"
+    },
+    {
+      "byte_size": 529720,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "x86_64-apple-darwin",
+      "sha256": "30f130b28ef3b3fa169b2690e6b801b94694f6b993c506862326512f21b4113a",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-apple-darwin.nightly.json"
+    },
+    {
+      "byte_size": 466603,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "aarch64-apple-darwin",
+      "sha256": "d7edaf07c182d38aa11cb69cddd53ba3e511d4381b9d2fcbea006775b8d675c5",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-apple-darwin.nightly.json"
+    },
+    {
+      "byte_size": 3716,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "x86_64-pc-windows-msvc",
+      "sha256": "9828a1de5ff4461a2bce62d4484333ece693b8ba7d90977c397dfdd732f67328",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/x86_64-pc-windows-msvc.nightly.json"
+    },
+    {
+      "byte_size": 1900,
+      "captured_at": "2026-08-31T00:00:00Z",
+      "channel": "nightly",
+      "platform": "aarch64-pc-windows-msvc",
+      "sha256": "05733811ec948bc22e2c87a1ce356f9f87d573830cbb6502044bd7a38fefefd2",
+      "source_url": "https://packages.edgedb.com/archive/.jsonindexes/aarch64-pc-windows-msvc.nightly.json"
+    }
+  ],
+  "schema_version": 1
+}
