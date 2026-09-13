@@ -1,0 +1,44 @@
+{
+  "indexes": [],
+  "replacements": [
+    {
+      "sha256": "06aead9ed60fbe579107f9b5794c55acab29eebb414e86a9c86236ff3bbac24e",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+c9b5460-aarch64-unknown-linux-musl.zip"
+    },
+    {
+      "sha256": "1ac30fe33f0a9fbd003ad193b9f4c47c6721118a26f9368ecc4de3bd6308b3c1",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+c9b5460-x86_64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "448f9dbfefeebd1835b3cf504555c768871040125ea1612958f2a268db766891",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+f5a1ade-aarch64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "5f11cfe431ede1f8e5d77557a911c3822fdfda942df35a7be85aef7790e7d8e8",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+f5a1ade-aarch64-apple-darwin.zip"
+    },
+    {
+      "sha256": "aa1ecf5f307ef12b0f3ece5bebd10279c287bf3d6687110f44a059704c74e460",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+c9b5460-aarch64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "bada53e49990f540faf0592f529f5aed3ffe964624df9cfa34d31c3e15ee7a97",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+edaa7ce-aarch64-unknown-linux-gnu.zip"
+    },
+    {
+      "sha256": "bd97b7bbe4bff5dfadaff6640b6b9c1ccc6f09f8bafe58c62940082194670edf",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+edaa7ce-aarch64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "e9091f37891f941f989b6d3675b02f29ff1bb24f5e459326b81676d9176963a2",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-7-ext-postgis/gel-server-7-ext-postgis-3.5.1+c9b5460-x86_64-unknown-linux-gnu.zip"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "published_at": "2026-09-13T14:50:54Z",
+    "release_id": 387624038,
+    "repository": "gelstable/gel-postgis",
+    "tag": "legacy-gel-server-7-ext-postgis"
+  }
+}
