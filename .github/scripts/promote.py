@@ -148,7 +148,18 @@ def main(*, run: Runner = _run) -> None:
     run(["git", "add", "--", *ALLOWED_PREFIXES, *sorted(ALLOWED_EXACT)])
     staged = run(["git", "diff", "--name-only", "--cached"]).splitlines()
     _validate_paths(staged, description="staged candidate")
-    run(["git", "commit", "-m", TITLE])
+    run(
+        [
+            "git",
+            "-c",
+            "user.name=github-actions[bot]",
+            "-c",
+            "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+            "commit",
+            "-m",
+            TITLE,
+        ]
+    )
     added = [
         path
         for path in run(
