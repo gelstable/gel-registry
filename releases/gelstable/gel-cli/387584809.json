@@ -1,0 +1,32 @@
+{
+  "indexes": [],
+  "replacements": [
+    {
+      "sha256": "3f1ab382cc143538f2ff67cb93facd80b8428489667c24d0fd53028a54b5616e",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v7.10.1/gel-cli-aarch64-pc-windows-msvc.exe"
+    },
+    {
+      "sha256": "709bcf4c6bafd6b5a4363c784dadc28d853dd160c5fdf82b76f90e068e17c91a",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v7.10.1/gel-cli-x86_64-pc-windows-msvc.exe"
+    },
+    {
+      "sha256": "72f796680bd382c69957a84edd212b23f6422859961fd87f168f7ae08f7809f9",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v7.10.1/gel-cli-x86_64-apple-darwin"
+    },
+    {
+      "sha256": "a43b673c09a86ee29a7212eae4394796d4644c06400093eb49af877ba9485abf",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v7.10.1/gel-cli-aarch64-unknown-linux-musl"
+    },
+    {
+      "sha256": "b8fbc2df1f469423ae96957ecb0ab0ad613d024ec382deae6e941d9a7fb470a5",
+      "url": "https://github.com/gelstable/gel-cli/releases/download/v7.10.1/gel-cli-x86_64-unknown-linux-musl"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "published_at": "2026-09-12T16:16:10Z",
+    "release_id": 387584809,
+    "repository": "gelstable/gel-cli",
+    "tag": "v7.10.1"
+  }
+}
