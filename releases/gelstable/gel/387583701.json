@@ -1,0 +1,60 @@
+{
+  "indexes": [],
+  "replacements": [
+    {
+      "sha256": "0c8289c2479901b83e88faf59a1c6e377a7cbdb7d327fd587ad988266a2b3730",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-aarch64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "3bbf693843c4c0dc603516eff9777019de71828049ed7e8804e9b53f3b3df4f7",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-aarch64-unknown-linux-gnu.tar.gz"
+    },
+    {
+      "sha256": "5c70194edf0d5e2aa31afac0275c643059a8ae1672a02b4ffc31f0b4ccb1cfda",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-x86_64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "5f3ca201090aafa9e480696207782456743c7516cfa85b04a769dcfdc69b06c1",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-x86_64-unknown-linux-gnu.tar.gz"
+    },
+    {
+      "sha256": "77da818b62dedcc25527270302797a64d7b2c6709a9057465cf150de12f56258",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-x86_64-unknown-linux-musl.tar.gz"
+    },
+    {
+      "sha256": "7a1d5737742aecac596ac9b9d7773db64bf4a5c7982d05a544e20d5b0c08ee0f",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-aarch64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "7e2f06093887d4761e05d1a1be951d0ce9ea3c0d60279afe03eeadfb85d9e85f",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-aarch64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "7e7029fc2b135ea3e9dba03b8480419af61ae0e4905717c1f9eb1ec026760800",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-x86_64-apple-darwin.tar.gz"
+    },
+    {
+      "sha256": "7e9a113a09863c1fe5ebc6ac81ea05d940a4dc4aa74bf6dff13fb5c4687bfd77",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-aarch64-apple-darwin.tar.gz"
+    },
+    {
+      "sha256": "a7b972e4f362722ef99fffbf8bb8331895f0ad8e680c0e9b3564f1277bacc668",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-x86_64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "c9e41eded8283e37a89b899621cde842e85a08fede00068e8e193e7f582546b8",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-x86_64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "e62c3d8f6431d9140214fbf891a61dbdd41665a1cf7138e228b62534188b7f78",
+      "url": "https://github.com/gelstable/gel/releases/download/v7.1/gel-server-aarch64-unknown-linux-musl.tar.gz"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "published_at": "2026-09-13T14:42:49Z",
+    "release_id": 387583701,
+    "repository": "gelstable/gel",
+    "tag": "v7.1"
+  }
+}
