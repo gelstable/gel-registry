@@ -1,0 +1,60 @@
+{
+  "indexes": [],
+  "replacements": [
+    {
+      "sha256": "4955a651740f253d1bb5493858e0343f18ba02309fcbd50bbafc59886ecad2df",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-x86_64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "8f9a73ae3fcfc533d22d76e44f3b9b22de03319b28fc3adb77a4b468f3098ee1",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-x86_64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "9c5251b44a0634b1f590ba8088a2309be1427cf4e8e8901e60c6c3038f4a5297",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-aarch64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "af05c428ae6a7e7c28f6c6aa060684db9e277dca088a745092b40521606e7a4a",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-aarch64-unknown-linux-gnu.tar.gz"
+    },
+    {
+      "sha256": "b5945b18bbbdeaae7ff93f64409329d2129e5d6dbd3634e5c136075611340729",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-aarch64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "b84835db7065bd0377d49b478966c30e1d15b1e2fa26b71022deb8ec50368e72",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-x86_64-unknown-linux-musl.tar.gz"
+    },
+    {
+      "sha256": "ba97f55ed9a6f9bd8f59d9854410ad8ac18874e6b7346705c97e5d3fb9b6d2f3",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-aarch64-apple-darwin.tar.gz"
+    },
+    {
+      "sha256": "d139d856dc4df20909e42f7b38c2235b61de66062648938f307e03962f2b3143",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-x86_64-apple-darwin.tar.gz"
+    },
+    {
+      "sha256": "d3b59fd01db2c0cb9b4b00373286e7fe0af587b35cb2bfd37df1705baa40d8b1",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-aarch64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "d5dc75bb63bd9a14e59080a512cf0fb8f83cb5cf4bc0ecdd0839f91eaf9cdf37",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-x86_64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "e41e6579993714cf34941cddb24295cda9208b5f28ee501e1360ba3fb158a8a4",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-x86_64-unknown-linux-gnu.tar.gz"
+    },
+    {
+      "sha256": "f05ae25e5cee313b3ac65bb2f6e906338b1bd26cab26c5867a8a3ebb191d30fe",
+      "url": "https://github.com/gelstable/gel/releases/download/v6.11/gel-server-aarch64-unknown-linux-musl.tar.gz"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "published_at": "2026-09-13T14:42:47Z",
+    "release_id": 387580052,
+    "repository": "gelstable/gel",
+    "tag": "v6.11"
+  }
+}

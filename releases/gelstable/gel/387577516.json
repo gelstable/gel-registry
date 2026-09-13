@@ -1,0 +1,60 @@
+{
+  "indexes": [],
+  "replacements": [
+    {
+      "sha256": "0d5b2fd624fc9e81cf39f763a0fc37ad124af1a1dd39de38dde877c96a83e7a3",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-aarch64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "1602e904351b46808b08975a5768e4f96f05a4f335852f3cc0dd1fefd540321b",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-aarch64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "214c21ecc17ed2d6641adbcbae40470168d0088e033dc8f7a9655521b3227ce9",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-x86_64-unknown-linux-gnu.tar.gz"
+    },
+    {
+      "sha256": "2eab4f58da29d9aaaccd53300dd5774e74d91b958603a52a537e938d4a0c5e23",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-x86_64-apple-darwin.tar.gz"
+    },
+    {
+      "sha256": "6c122447c6e84bd71e4f7840dcb350d58c4b2e2281f18a0796fb4e76fb377352",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-x86_64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "763bb0f5bf2d0e239bfb0c857e62424b8ba0cad3934444d294ed9325d6c542f8",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-x86_64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "89bfc291e4bf3fae9d57044d701c9702e975c0e998e772186e5b708234c7422e",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-x86_64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "8b2d41f6defc3e22fdbcb090e22a54de081c610027ae1058338735ac799bf418",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-aarch64-unknown-linux-musl.tar.gz"
+    },
+    {
+      "sha256": "9951f44b2ef9b08b3f4f06ecd81d58f6b4a989c803ced78678c85f122bdb5bb9",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-x86_64-unknown-linux-musl.tar.gz"
+    },
+    {
+      "sha256": "b82c7bcee56ce36266d8d104e0bd2b42f96ee38cf3f8273ab826a7ff1d6f3e7c",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-aarch64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "e1415bb95a8ed6d0438a48799012151f763e6f1c2e12f48e7396d8a5e3ec6d70",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-aarch64-unknown-linux-gnu.tar.gz"
+    },
+    {
+      "sha256": "f2b038be99c2366ee0648ee6f78689ce75c2556b739b56463e1cfca9557529e0",
+      "url": "https://github.com/gelstable/gel/releases/download/v5.8/gel-server-aarch64-apple-darwin.tar.gz"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "published_at": "2026-09-13T14:42:45Z",
+    "release_id": 387577516,
+    "repository": "gelstable/gel",
+    "tag": "v5.8"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "indexes": [],
+  "replacements": [
+    {
+      "sha256": "52b7f41dbdb2d2cfd635d6628895164677095b7d012a22aaa0b5cbffddcdec14",
+      "url": "https://github.com/gelstable/gel/releases/download/gel-ls-v8.0-dev.9812+e773536/gel-ls-8.0-dev.9812+e773536-aarch64-unknown-linux-gnu.tar.gz"
+    },
+    {
+      "sha256": "b88cacdaf1087a4e744e596dd83e3050ffb5c6895c3efe0a411bb2b7ebeab1f9",
+      "url": "https://github.com/gelstable/gel/releases/download/gel-ls-v8.0-dev.9812+e773536/gel-ls-8.0-dev.9812+e773536-aarch64-unknown-linux-gnu.tar.zst"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "published_at": "2026-09-13T14:42:43Z",
+    "release_id": 387551366,
+    "repository": "gelstable/gel",
+    "tag": "gel-ls-v8.0-dev.9812+e773536"
+  }
+}
