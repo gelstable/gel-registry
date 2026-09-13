@@ -47,7 +47,10 @@ def _candidate_from_main(
 
 
 def _is_git_subcommand(command: list[str], subcommand: str) -> bool:
-    return bool(command) and command[0] == "git" and subcommand in command[1:]
+    arguments = command[1:]
+    while len(arguments) >= 2 and arguments[0] == "-c":
+        arguments = arguments[2:]
+    return bool(command) and command[0] == "git" and arguments[:1] == [subcommand]
 
 
 def test_second_fresh_candidate_contains_release_a_and_new_release_b() -> None:
@@ -77,6 +80,9 @@ def test_git_subcommand_recognizes_command_local_config() -> None:
             "message",
         ],
         "commit",
+    )
+    assert not _is_git_subcommand(
+        ["git", "-c", "commit", "status", "--short"], "commit"
     )
 
 
