@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -35,6 +36,14 @@ def _snapshot_artifacts(repo: Path, snapshot: str) -> dict[str, bytes]:
         blob = repo / "public" / "i" / Path(index.ref).name
         artifacts[f"i/{blob.name}"] = blob.read_bytes()
     return artifacts
+
+
+def _manifest_blob_mapping(root: Path) -> set[tuple[str, str, str]]:
+    """Map document-relative index URLs to their shared blob identity."""
+    manifest = RootManifest.model_validate_json(root.read_bytes())
+    return {
+        (item.channel, item.platform, Path(item.ref).name) for item in manifest.indexes
+    }
 
 
 def _assert_bootstrap_reproduction(repo: Path) -> None:
@@ -78,6 +87,20 @@ def test_bootstrap_reproduction_survives_a_valid_later_promotion() -> None:
         promoted_snapshot = publish_bootstrap(promoted).snapshot
 
         assert promoted_snapshot != BOOTSTRAP_SNAPSHOT
+        assert json.loads((promoted / "pointers" / "latest.json").read_bytes()) == {
+            "snapshot": promoted_snapshot
+        }
+        assert (
+            json.loads((promoted / "public" / "v1" / "snapshots.json").read_bytes())[
+                "latest"
+            ]
+            == promoted_snapshot
+        )
+        assert _manifest_blob_mapping(
+            promoted / "public" / "registry.json"
+        ) == _manifest_blob_mapping(
+            promoted / "public" / "s" / promoted_snapshot / "registry.json"
+        )
         _assert_bootstrap_reproduction(promoted)
 
 
