@@ -29,27 +29,27 @@ value = "public, max-age=0, s-maxage=60, stale-while-revalidate=600, stale-if-er
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-unknown-linux-gnu.json"
-destination = "/i/0588b1f65c010c7ff3c0925ac1ce3d82.json"
+destination = "/i/8bd06c01c5e8c1315357ad8ff7197905.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-unknown-linux-musl.json"
-destination = "/i/666dbfd9385cf990b1a5f6cd7640c5bb.json"
+destination = "/i/177326a16c6f5c98cd8c12d8029b1f3f.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-unknown-linux-gnu.json"
-destination = "/i/40bc945e789ec4921e0dc31f22fcb0ba.json"
+destination = "/i/4c495f627aeb34b6b6ac9ab155b0da68.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-unknown-linux-musl.json"
-destination = "/i/1ab60e394288149c8520a30088ad3405.json"
+destination = "/i/d5784a1da043dad0fbf8d7099832fa83.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-apple-darwin.json"
-destination = "/i/0e24292e22a636ba74569272a5a8f810.json"
+destination = "/i/748a1740553fed0b844fd9092d8555bb.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-apple-darwin.json"
-destination = "/i/d651da574947c5c0a03ee6116274c322.json"
+destination = "/i/6bfb2b9b90e1b088cd793b714930810f.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-pc-windows-msvc.json"

@@ -1,0 +1,148 @@
+{
+  "indexes": [],
+  "replacements": [
+    {
+      "sha256": "027e16a9bbc5fbb98014ae091f4d33b3d77f7a9d2d4afc2747e3ebc9b3052e7d",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+edaa7ce-aarch64-unknown-linux-gnu.zip"
+    },
+    {
+      "sha256": "22adc7708006e97ecd0d1d729f8de8a975e5437c062ddac0d5208db437ea4e13",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+c6766e7-x86_64-unknown-linux-gnu.zip"
+    },
+    {
+      "sha256": "28ca67fde9387b5c4d29b0897067eccb5ff923da4b883f5b370745c37deb1f14",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+f5a1ade-x86_64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "2a098412363da2dfdc57f2ef0105bb13e187ff393a83c3b324a8f870012c72b6",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+5cf8264-aarch64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "30fb10aca941e218c6ba36a11f84952c11e5d6ee1163c7ab7cf76d0be4a8c32a",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+e0f2a4b-aarch64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "3215fec613adeec5749d269592332cd5b3344b58018575268dfdc280be668b17",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+d961cd8-x86_64-apple-darwin.zip"
+    },
+    {
+      "sha256": "3228bc6e4b9425f085bfb4cba645f0669fa7b5e0ddf825928c793ce22b5f2bf7",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+a62adf7-aarch64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "48bc3e77f5472fb165264336bba2a48cfd1cb4b260d333567c9026347e78ace7",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+c6766e7-x86_64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "4a792f7154b76c637e8f70f969dfcac0275e9142099b01401d7a0e70b285ad6c",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+68f54ab-x86_64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "4e08cf231252fc432f2905d5ace0b1c7ce424aa8ae30399cf70aabc075c651aa",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+5cf8264-x86_64-unknown-linux-musl.zip"
+    },
+    {
+      "sha256": "54caf112093fde2cdc0ca0fbd8ab3b5c03527b8e1dc1e7c6ccbb9aa59108a9b4",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+c687c69-aarch64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "61ba89b942a2dc3fe8d2173e7919c2971869888996e2da804dfc3362b833ba93",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+0227e69-x86_64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "692dba5c8296d401418543b0189ed59f811e4f7f07d3d508c0500b7418af5f74",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+589f780-aarch64-apple-darwin.zip"
+    },
+    {
+      "sha256": "6a81701e7989a1e55919c3250099080b666b5ef3efc8df1dd1843df3cc07a7a8",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+c687c69-aarch64-apple-darwin.zip"
+    },
+    {
+      "sha256": "6ae1bedff536829ad8d659e723a876577edc12851be1cef1cbe684ecc3eefe70",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+5cf8264-x86_64-unknown-linux-gnu.zip"
+    },
+    {
+      "sha256": "6db3e530c5fbc3686986874639264749d2bb303a2040fa1b663b7f34a868951a",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+d961cd8-x86_64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "6f970e3f6f5d69fe19eb89d93707454a6859798ba87997b3d9b37f5cca5436ef",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+5cf8264-x86_64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "6fba7abeac9c13e5442a859473fbfbd05552e8272c3ebcd1e8cd1205458aaeb0",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+dc6412f-x86_64-unknown-linux-gnu.zip"
+    },
+    {
+      "sha256": "8709e5a1ddd89fc03e72b29972ac7cfa613a40cfe8d5ea238ce2a33ce7b88402",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+dc6412f-x86_64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "884beeed6c23e6367f24bcfb543a6c539c119ca023eb6f4015a73f74aca0c5e6",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+523096f-aarch64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "8d1440af6a96ad87bcb805532ec2adab2aaf934e83657f46832813a59639a080",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+dc6412f-x86_64-unknown-linux-musl.zip"
+    },
+    {
+      "sha256": "92f22fa515c1d7fc42af51a462dcc220c89a30588e9d93c436671d3647bcb9a7",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+68f54ab-aarch64-apple-darwin.zip"
+    },
+    {
+      "sha256": "94e649db016f14f65d864d3b20cb17ccf8d529f1318e252ee7f978215f999550",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+dc6412f-x86_64-unknown-linux-musl.tar.zst"
+    },
+    {
+      "sha256": "a2beb59ceca80271b804a622c0cb3830bc4ebc949149bb4dcc852c578172e878",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+0227e69-x86_64-unknown-linux-musl.zip"
+    },
+    {
+      "sha256": "b85c9fc1f9f03a5fc1989f55e38e74b50e583f81fcf0d334e7260632b841d8c4",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+523096f-aarch64-unknown-linux-musl.zip"
+    },
+    {
+      "sha256": "c2fc721a7d6cd3e149019001029a6c540aac6126cc9279e881ae913e6f9f5ed4",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+a62adf7-aarch64-unknown-linux-gnu.zip"
+    },
+    {
+      "sha256": "c5774b9e0d51d33b46ff2718ba83244e59752084566edbd4060d9e7adcb20e3b",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+68f54ab-aarch64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "d0d7ed9023588a747f0e93e307873e34d0a2fecb16f931828b99ac1143d9ffff",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+e0f2a4b-aarch64-unknown-linux-musl.zip"
+    },
+    {
+      "sha256": "d522847dd842d87b0e3194d2b32dd6bf04ef5d054676887eee1189f342a9da40",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+5cf8264-x86_64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "d6149d7763c0a690f744d1bce3a15eae8c80d67de24413b2abea548ebab8df0f",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+edaa7ce-aarch64-unknown-linux-gnu.tar.zst"
+    },
+    {
+      "sha256": "e707c0267d20b3142233fd24b36adcc0322b32b6e034964a8f270de161c2c290",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+68f54ab-x86_64-apple-darwin.zip"
+    },
+    {
+      "sha256": "f27f53bef44a6bd9978f12fce595e3ab23dd16a25319e949b48e14307505fe39",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+589f780-aarch64-apple-darwin.tar.zst"
+    },
+    {
+      "sha256": "f7b5a9b2e0cd9e2bb2ce19b658e1d11bf29dc63902fec79dab62faa7083569cd",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+5cf8264-aarch64-unknown-linux-gnu.zip"
+    },
+    {
+      "sha256": "f9f84abb837d528085604048cfffac00a10ed0709b04033361aa88dab04e155a",
+      "url": "https://github.com/gelstable/gel-postgis/releases/download/legacy-gel-server-6-ext-postgis/gel-server-6-ext-postgis-3.5.1+f5a1ade-x86_64-apple-darwin.zip"
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "published_at": "2026-09-13T14:50:53Z",
+    "release_id": 387622830,
+    "repository": "gelstable/gel-postgis",
+    "tag": "legacy-gel-server-6-ext-postgis"
+  }
+}
