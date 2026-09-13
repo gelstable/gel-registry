@@ -1,0 +1,396 @@
+{
+  "packages": [
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-09-02T21:26:40.003845+00:00",
+      "installref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.0+44248ff.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.0+44248ff.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "49993ce69b5bfe35989c6bd6d361d041b94b52a0a065e37e4b44fd81234ddd5b5e21cd63b78f622a2a95d4c62c7232c952ab03b32af6228f3385b59f0e63d26f",
+            "sha256": "acf3df3a24966c68541c947200d08251b34920221cffd7cc148683852f09f79c",
+            "size": 23552512
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.0+44248ff.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "44dc9022a7281e48d073f5dab592273c5e256090ede081e7a78c12842221d74983370662a2918895104c940350fedf1e00bde96eba7009793b52871d49005873",
+            "sha256": "ff3b229b714f9fcabf9ea8ac2af684ec03643d7f26e15ced5d2edffe4926ac8c",
+            "size": 7382588
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.0+44248ff.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "e6ef6ed9b64df69f4236ac75a111a1daef52608c739ff0760652d909d3a720f4437491076a13d1997807c7979d9453a0052213e8be2847271f5cf35f1286b749",
+            "sha256": "b5d1529f885e8520a13beeeb41539c114b1b780fa9546896e0822db172db832d",
+            "size": 9690892
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202509022125",
+      "slot": "",
+      "tags": {},
+      "version": "7.8.0+44248ff",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "44248ff",
+          "build_revision": "202509022125",
+          "scm_revision": "4833cb777",
+          "source_date": "2025090221"
+        },
+        "minor": 8,
+        "patch": 0,
+        "prerelease": []
+      },
+      "version_key": "7.8.0.202509022125"
+    },
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-09-04T05:12:33.407069+00:00",
+      "installref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.1+a6f9836.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.1+a6f9836.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "225a001c072e0b41379c64e2c9440f7c497fe72d495646db15cf32381809fd58c5c000cfcb496235a9050c9fb6ef221e5a911bac221ec677ef2defbbb5a3c5dc",
+            "sha256": "7ab94161630a8825d19991e8d7a8f4e23fd0a957b0e53e99d20b6550cc5fd9e1",
+            "size": 23842304
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.1+a6f9836.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "c4fc289a2b337630cdc5a90c6be619f1f234039ac0371b7d9cd66c2313e10e2e09589d5dd754f508646e674d1cfe1651935976173da089fa0b07c29ba4d2791e",
+            "sha256": "dfab66223c44ddda8fa1b05e28bc1082476bf649a8c0faf4b297fd5fc654f332",
+            "size": 7487851
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.8.1+a6f9836.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "1d5e2729ee0074dbe1261f1c84240ebfb908acbdb3c48bf0af6d85fc3c84141fe1823a481c59716857d7a5e62e454f379e63e5fa7d4e4a5b73540302f0e10077",
+            "sha256": "b8fadcb165cf5fc12f68cd4dfe8cc91b75b790a083008dcbb10d6ffb0028b590",
+            "size": 9815496
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202509040509",
+      "slot": "",
+      "tags": {},
+      "version": "7.8.1+a6f9836",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "a6f9836",
+          "build_revision": "202509040509",
+          "scm_revision": "77bccac27",
+          "source_date": "2025090405"
+        },
+        "minor": 8,
+        "patch": 1,
+        "prerelease": []
+      },
+      "version_key": "7.8.1.202509040509"
+    },
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-09-15T20:18:19.155468+00:00",
+      "installref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+4398a70.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+4398a70.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "5cf0eba5ca4612abb1e2dea4e9209203e82df9485ed25a4ead225ff08da03e5c115459ab41c00844c8afc91964d60aaa41c4c1ccf91fa291d5fcd3b6aba91b35",
+            "sha256": "4d56e930c47964f470d824269455b32ca74b6e04ee5c97e9b2413590c76cf09e",
+            "size": 23897088
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+4398a70.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "d22049b93b599afc8955d7fcda89780b575cfe822f5cd154d317478bf53174459a1be178e34227cd825ce54b2482754e40e025e4547f223ebc9de5a4f14946d6",
+            "sha256": "5cadfd341463407e3c8a34b67838d49dc9e0c5ecfe414db01f9ef96f94ef2955",
+            "size": 7490323
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+4398a70.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "4124bdb3d1ff48091cb31b6a45e292acc650d9d28d94a7c4be864868fe2a79b34a0e41f895e4b34d9b20a5f98f833876d76f766500535081a053568f20b488b7",
+            "sha256": "cf5e59536231eddb73206fcfcad303fda5566e087e7f147301d7388206caf9c3",
+            "size": 9821504
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202509152016",
+      "slot": "",
+      "tags": {},
+      "version": "7.9.0+4398a70",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "4398a70",
+          "build_revision": "202509152016",
+          "scm_revision": "feb7f8ccf",
+          "source_date": "2025091520"
+        },
+        "minor": 9,
+        "patch": 0,
+        "prerelease": []
+      },
+      "version_key": "7.9.0.202509152016"
+    },
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-10-22T17:46:45.797997+00:00",
+      "installref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+ec0fa4d.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+ec0fa4d.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "c4420df99e03a02aaf2235395a9d5c28701ea19573d67d5c3deddb7e877bbb6252157e5c75646dde0d1995fb1dcd33fc0de55b584de5925f9672cfe8c5f34575",
+            "sha256": "5658b3964ed5e15622a1127f11168b54fbe2eb1c82a68258360be061f9f0314d",
+            "size": 23900672
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+ec0fa4d.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "51a2048f904ed3eb660fc960e55200edc21f5f6b57b4f1135542923637a513aa58d9eac399c79fe406919a01ca389fcfdcd5f852ed4e8783e547eff4289263b6",
+            "sha256": "58a7d372d41714e132737be355ddcfeb446d40b2ee50f794d1407c6926885d1b",
+            "size": 7491683
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.9.0+ec0fa4d.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "f0804bf81e5e00aa25f8c347c2f4534c2950d10c22f68a3a67b43827150729305d881b3de4dda48984dd23751c13048c68ee3ccdd975b4d4e6793acf1636e64f",
+            "sha256": "377ab6b989c02888b6e73b4ddc369fcb69e0f0cdc223feb182cea332e7e36e2c",
+            "size": 9820434
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202510221745",
+      "slot": "",
+      "tags": {},
+      "version": "7.9.0+ec0fa4d",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "ec0fa4d",
+          "build_revision": "202510221745",
+          "scm_revision": "feb7f8ccf",
+          "source_date": "2025091520"
+        },
+        "minor": 9,
+        "patch": 0,
+        "prerelease": []
+      },
+      "version_key": "7.9.0.202510221745"
+    },
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-11-14T02:01:50.194113+00:00",
+      "installref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.0+f947a59.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.0+f947a59.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "487df16ed5cb433cb3fe531e1b813a4eb952566cc9abf2b3e0c64ce3adc0bda99bcb64e2287a67d234c3cf44e12283bfca74c146d7832fe1f1a15b5c9f8a2829",
+            "sha256": "19808f9b19d3a754cb22ecbbd4abcba93028adb579b7fe1a813009f134cfcc14",
+            "size": 24252928
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.0+f947a59.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "c5e9785a94b0259a67ec79d799eb54a67f74cb61964338532d69a57ff36c092289a4b6dd5b0cdf836f665a4a2e5ec171f636d192c2e1e97d7cd59c60002b9564",
+            "sha256": "cb8f92363cdd1a434d59541985749c724b9f7056674275c25fce9c57c047067f",
+            "size": 7608263
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.0+f947a59.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "1a69c08b5ff01bcded3c70854c879297e6e1dc420359f58c26176fda2b2f334d59e509ac223b0d7aceeff3f0a7185c58c2919b59248cdc6ffdb2e6ed1c677680",
+            "sha256": "79f3e5e1b347e3b91cfedf37c3227aa16238879700668edeb85f1a2d62b9d1a8",
+            "size": 10004456
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202511140200",
+      "slot": "",
+      "tags": {},
+      "version": "7.10.0+f947a59",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "f947a59",
+          "build_revision": "202511140200",
+          "scm_revision": "16b127040",
+          "source_date": "2025111400"
+        },
+        "minor": 10,
+        "patch": 0,
+        "prerelease": []
+      },
+      "version_key": "7.10.0.202511140200"
+    },
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-11-17T19:26:25.108659+00:00",
+      "installref": "https://github.com/gelstable/gel-cli/releases/download/v7.10.1/gel-cli-aarch64-pc-windows-msvc.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://github.com/gelstable/gel-cli/releases/download/v7.10.1/gel-cli-aarch64-pc-windows-msvc.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "b94486acf29a848e9077cf08ac8e4f338300fe5cab4f1809a76837b78fa1941c6ea7b3428a483b0f90ea9f8f6bc6077d14c3f0129e4824fc394f60e431a124aa",
+            "sha256": "3f1ab382cc143538f2ff67cb93facd80b8428489667c24d0fd53028a54b5616e",
+            "size": 24219136
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.1+5222dac.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "35285cd4f5173f941aced2a01e28f4a463a882eaf2d891f7c112cf1de28cd5baa5cf89c7e2809b1c554fa8770e8af7420348254474a2451b1d182f81d7901240",
+            "sha256": "9e961a2de2ce06afa22d98de9d7a4c1830a03f7fd47d265e5382a021ac8890f2",
+            "size": 7595813
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.1+5222dac.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "0bba47db415f0f33cbbb015f10afb1a3b6c5aa1cbc78bf86d12ba855e5ad7760c6bec539c8c03883cc3a31a7775d1d8001c3834e8c93e56b56ba9958e8a0c0d7",
+            "sha256": "a4c7697c5945f51a490e3bd7af3818f767b3371b873597c4847b9181f37926b9",
+            "size": 9984214
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202511171925",
+      "slot": "",
+      "tags": {},
+      "version": "7.10.1+5222dac",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "5222dac",
+          "build_revision": "202511171925",
+          "scm_revision": "7a142e35a",
+          "source_date": "2025111719"
+        },
+        "minor": 10,
+        "patch": 1,
+        "prerelease": []
+      },
+      "version_key": "7.10.1.202511171925"
+    },
+    {
+      "architecture": "aarch64",
+      "basename": "gel-cli",
+      "build_date": "2025-11-23T18:12:57.917903+00:00",
+      "installref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.2+25c49a7.exe",
+      "installrefs": [
+        {
+          "encoding": "identity",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.2+25c49a7.exe",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "554e836cb7d82859367b4f49232f2ccbe8de796f4c7c18d5d843ddd0607fd26b794e8cf0205ceddb8f36a0d68609966b9b32868a457009fad2a4282a07d24627",
+            "sha256": "37c2c005dd86d68661d7113a57edfc04c5bb3c5ba091d518266d63d0be571291",
+            "size": 24111616
+          }
+        },
+        {
+          "encoding": "zstd",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.2+25c49a7.exe.zst",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "cb0bceac4c9198215273a7df1eb945e2d0975e65b6a9ba8ae77af908c08059b9e2163065849d70b42a28a94d78f5849f2ef33d8ba9b15beb8de97aca60311c2e",
+            "sha256": "d99508c5ca428ff7b183dd6f8ed721c214e936a4accb67695558ecf3a35491eb",
+            "size": 7567360
+          }
+        },
+        {
+          "encoding": "gzip",
+          "ref": "https://packages.geldata.com/archive/aarch64-pc-windows-msvc/gel-cli-7.10.2+25c49a7.exe.gz",
+          "type": "application/vnd.microsoft.portable-executable",
+          "verification": {
+            "blake2b": "adb208086037c535ac86bf98352ec375f5b2b224374f067a1aaf123e9a1e54008dda6a2e5c059c2f48c718d20bf45b70e7e3dbcda7fcdc453fb9ca20f16f22a0",
+            "sha256": "19c4834b2e750b93b2f8d4804c8335bc91d4b8bcab5c1d4e7f6dc7755da9193f",
+            "size": 9956603
+          }
+        }
+      ],
+      "name": "gel-cli",
+      "revision": "202511231811",
+      "slot": "",
+      "tags": {},
+      "version": "7.10.2+25c49a7",
+      "version_details": {
+        "major": 7,
+        "metadata": {
+          "build_hash": "25c49a7",
+          "build_revision": "202511231811",
+          "scm_revision": "7c602f7c1",
+          "source_date": "2025112200"
+        },
+        "minor": 10,
+        "patch": 2,
+        "prerelease": []
+      },
+      "version_key": "7.10.2.202511231811"
+    }
+  ]
+}

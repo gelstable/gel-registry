@@ -33,7 +33,7 @@ destination = "/i/fe1816b4c42ef81352eedd31df97c99d.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-unknown-linux-musl.json"
-destination = "/i/0f0047aca09d3c32c4165fa2355f9f4e.json"
+destination = "/i/cd2cc1e7d77cf0944fbed1ba2c335305.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-unknown-linux-gnu.json"
@@ -41,11 +41,11 @@ destination = "/i/7c4201a101073a36aa18b4b7e1e59f27.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-unknown-linux-musl.json"
-destination = "/i/efe593ed85fe0c5a9d651c5eae6fb4f3.json"
+destination = "/i/97165bc2665c0a183c5c422443e5e135.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-apple-darwin.json"
-destination = "/i/d7e96837e96caba6adc7d04749109845.json"
+destination = "/i/dff5b2754df44369fa9d04a9befc8b72.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-apple-darwin.json"
@@ -53,11 +53,11 @@ destination = "/i/f294f0ae6a325c1e70d58c2a6b3de1d7.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-pc-windows-msvc.json"
-destination = "/i/039df4462e84848e7634b7f26bbcc99f.json"
+destination = "/i/306c01a635dccd0df7cf9efd6cacc049.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-pc-windows-msvc.json"
-destination = "/i/ef7b13e0d244f07b28e60d784cb38933.json"
+destination = "/i/14e007d1d1429e73f3f20e812ce74213.json"
 
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-unknown-linux-gnu.testing.json"
