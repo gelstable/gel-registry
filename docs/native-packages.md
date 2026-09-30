@@ -23,6 +23,21 @@ To withdraw an asset, add `{ "sha256": "<digest>", "reason": "<reason>" }` to
 `native/yanked.json`, a JSON array. Downloads and package validation failures
 abort rendering; they are never recorded as release rejections.
 
+## Signing and offline validation
+
+After rendering, set `GNUPGHOME` to the signing key home and
+`GELSTABLE_SIGNING_FPR` to the full signing subkey fingerprint, then run
+`gel-registry native sign --repo .`. The command signs APT Release files as
+InRelease and Release.gpg, and RPM repomd.xml as repomd.xml.asc, using SHA512.
+It immediately verifies each signature against `public/keys/gelstable.asc`.
+
+`gel-registry validate --repo .` checks these signatures, metadata checksums,
+package sets, the lock against release records after yanks, and unexpected
+repository files. Validation needs only public metadata and the public key;
+it does not download packages or read the signing key home. Package name and
+version identities are checked during rendering; offline checks compare the
+record and metadata fields available without package binaries.
+
 ## Local Linux tests
 
 The fixture suite builds real packages with nFPM and generates disposable signing

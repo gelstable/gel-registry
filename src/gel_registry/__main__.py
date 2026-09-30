@@ -214,6 +214,12 @@ def _run_native_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_native_sign(args: argparse.Namespace) -> int:
+    native.sign_native(Path(args.repo))
+    print("signed")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gel-registry")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -226,6 +232,9 @@ def _build_parser() -> argparse.ArgumentParser:
     native_render.add_argument("--out", required=True, type=Path)
     native_render.add_argument("--base-url", default="https://registry.gelstable.com")
     native_render.set_defaults(handler=_run_native_render)
+    native_sign = native_commands.add_parser("sign")
+    _add_repo(native_sign)
+    native_sign.set_defaults(handler=_run_native_sign)
 
     capture_parser = commands.add_parser("capture", help="capture legacy indexes")
     _add_repo(capture_parser)

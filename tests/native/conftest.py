@@ -23,6 +23,7 @@ TOOLS = (
     "rpmkeys",
     "rpmsign",
     "gpg",
+    "gpgv",
 )
 
 
