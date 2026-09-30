@@ -1,0 +1,52 @@
+name: Native package clients
+"on":
+  pull_request:
+    paths:
+      - src/gel_registry/native/**
+      - tests/native/**
+      - tests/clients/**
+      - .github/workflows/native-clients.yml
+      - uv.lock
+  workflow_dispatch: {}
+concurrency:
+  group: native-clients-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  clients:
+    name: Signed fixture clients
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.6"
+      - name: Install native fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils createrepo-c rpm gnupg
+          curl -fsSL https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz -o "$RUNNER_TEMP/nfpm.tar.gz"
+          echo "0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783  $RUNNER_TEMP/nfpm.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/nfpm.tar.gz" -C "$RUNNER_TEMP" nfpm
+          sudo install "$RUNNER_TEMP/nfpm" /usr/local/bin/nfpm
+      - name: Build signed fixtures and test real clients
+        env:
+          REQUIRE_NATIVE_TOOLS: "1"
+        run: |
+          set -euo pipefail
+          uv sync --locked
+          uv run python tests/clients/fixture.py "$RUNNER_TEMP/fixtures" http://127.0.0.1:8765
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP/fixtures" > "$RUNNER_TEMP/http.log" 2>&1 &
+          server=$!
+          trap 'kill "$server"' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:8765/valid/keys/gelstable.asc >/dev/null; then break; fi
+            sleep 1
+          done
+          for image in debian:12 ubuntu:24.04; do
+            docker run --rm --network host -v "$PWD/tests/clients:/tests:ro" "$image" bash /tests/apt.sh http://127.0.0.1:8765
+          done
+          docker run --rm --network host -v "$PWD/tests/clients:/tests:ro" rockylinux:9 bash /tests/dnf.sh http://127.0.0.1:8765

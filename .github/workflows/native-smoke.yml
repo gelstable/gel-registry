@@ -1,0 +1,93 @@
+name: Native package production acceptance
+"on":
+  schedule:
+    - cron: '43 6 * * *'
+  deployment_status: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Production smoke or legacy migration
+        type: choice
+        options: [smoke, migration]
+        default: smoke
+concurrency:
+  group: native-production-${{ github.event_name }}-${{ inputs.mode || 'smoke' }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  smoke:
+    name: Production installation and PostGIS
+    if: inputs.mode != 'migration' && (github.event_name != 'deployment_status' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'production'))
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        image: [debian:12, debian:13, ubuntu:22.04, ubuntu:24.04, ubuntu:26.04, rockylinux:9]
+        channel: [stable, testing]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Test populated production channel
+        env:
+          IMAGE: ${{ matrix.image }}
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          set -euo pipefail
+          cp native/packages.lock.json "$RUNNER_TEMP/packages.json"
+          arch=amd64
+          test "$(uname -m)" != aarch64 || arch=arm64
+          format=deb
+          if test "$IMAGE" = rockylinux:9; then
+            format=rpm
+            arch=x86_64
+            test "$(uname -m)" != aarch64 || arch=aarch64
+          fi
+          python3 - "$RUNNER_TEMP/packages.json" "$CHANNEL" "$arch" "$format" <<'PY' > "$RUNNER_TEMP/populated"
+          import json, sys
+          packages = json.load(open(sys.argv[1]))
+          print('yes' if any(p['channel'] == sys.argv[2] and p['name'] == 'gel-7' and p['format'] == sys.argv[4] and p['arch'] == sys.argv[3] for p in packages) else 'no')
+          PY
+          if test "$(cat "$RUNNER_TEMP/populated")" = no; then
+            echo "No packages for $CHANNEL on $arch; skipping launch-empty channel"
+            exit 0
+          fi
+          docker run --rm -v "$PWD/tests/clients:/tests:ro" "$IMAGE" bash /tests/smoke.sh "$CHANNEL"
+  migrate:
+    name: Preserve legacy server data
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'migration'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        image: [debian:12, rockylinux:9]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Test legacy data migration
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: docker run --rm -v "$PWD/tests/clients:/tests:ro" "$IMAGE" bash /tests/migrate.sh
+  report:
+    name: Report acceptance failure
+    needs: [smoke, migrate]
+    if: failure()
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write # Open an issue linking failed acceptance logs.
+    steps:
+      - name: Open acceptance failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh issue create --title 'Native package production acceptance failed' --body "Review the failing container acceptance logs at $RUN_URL."
