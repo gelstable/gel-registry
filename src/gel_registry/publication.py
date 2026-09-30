@@ -28,7 +28,7 @@ from .render import (
 )
 from .render.schemas import is_approved_release_schema_predecessor
 
-_SOURCE_ROOTS = ("bootstrap", "releases", "pointers", "public")
+_SOURCE_ROOTS = ("sources", "bootstrap", "releases", "pointers", "public")
 _MUTABLE_PATHS = frozenset(
     {
         "pointers/latest.json",
@@ -55,6 +55,11 @@ _MIGRATED_SUPPORT_PATHS = frozenset(
 _SUPPORT_PATHS = frozenset(
     {
         "public/healthz",
+        "public/gelstable.sources",
+        "public/gelstable.repo",
+        "public/gelstable-testing.sources",
+        "public/gelstable-testing.repo",
+        "public/keys/gelstable.fingerprint",
         "public/v1/schema/capture.json",
         "public/v1/schema/package-index.json",
         "public/v1/schema/pointer.json",

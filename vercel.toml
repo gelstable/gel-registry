@@ -27,6 +27,36 @@ source = "/v1/(.*)"
 key = "Cache-Control"
 value = "public, max-age=0, s-maxage=60, stale-while-revalidate=600, stale-if-error=86400"
 
+[[headers]]
+source = "/apt/dists/(.*)"
+headers = [
+    { key = "Cache-Control", value = "public, max-age=0, s-maxage=60" },
+]
+
+[[headers]]
+source = "/rpm/(.*)"
+headers = [
+    { key = "Cache-Control", value = "public, max-age=0, s-maxage=60" },
+]
+
+[[headers]]
+source = "/keys/(.*)"
+headers = [
+    { key = "Cache-Control", value = "public, max-age=31536000, s-maxage=31536000, immutable" },
+]
+
+[[headers]]
+source = "/apt/pool/(.*)"
+headers = [
+    { key = "Cache-Control", value = "public, max-age=300" },
+]
+
+[[headers]]
+source = "/rpm/pool/(.*)"
+headers = [
+    { key = "Cache-Control", value = "public, max-age=300" },
+]
+
 [[rewrites]]
 source = "/archive/.jsonindexes/x86_64-unknown-linux-gnu.json"
 destination = "/i/8bd06c01c5e8c1315357ad8ff7197905.json"
@@ -118,3 +148,8 @@ destination = "/i/cdfc57544b10b828d2831e77ca3930a1.json"
 [[rewrites]]
 source = "/archive/.jsonindexes/aarch64-pc-windows-msvc.nightly.json"
 destination = "/i/53669408a953d4843b5f409b90ceaaaa.json"
+
+[[redirects]]
+source = "/:format(apt|rpm)/pool/:repo(gel|gel-cli|gel-postgis)/:tag/:asset"
+destination = "https://github.com/gelstable/:repo/releases/download/:tag/:asset"
+permanent = false

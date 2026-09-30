@@ -23,6 +23,7 @@ from typing import Any
 import pytest
 
 from gel_registry.contracts import RootManifest
+from gel_registry.gather import load_repositories
 from gel_registry.render.hosting import (
     MOVING_CACHE_CONTROL,
     PINNED_CACHE_CONTROL,
@@ -67,7 +68,7 @@ def test_vercel_serves_the_public_tree_verbatim_with_no_build_step() -> None:
 
     assert config["outputDirectory"] == "public"
     assert config.get("framework") is None
-    for forbidden in ("functions", "buildCommand", "redirects", "routes", "builds"):
+    for forbidden in ("functions", "buildCommand", "routes", "builds"):
         assert forbidden not in config
 
 
@@ -79,6 +80,11 @@ def test_pinned_trees_are_immutable_and_moving_documents_are_revalidated() -> No
         "/s/(.*)": PINNED_CACHE_CONTROL,
         "/registry.json": MOVING_CACHE_CONTROL,
         "/v1/(.*)": MOVING_CACHE_CONTROL,
+        "/apt/dists/(.*)": "public, max-age=0, s-maxage=60",
+        "/rpm/(.*)": "public, max-age=0, s-maxage=60",
+        "/keys/(.*)": PINNED_CACHE_CONTROL,
+        "/apt/pool/(.*)": "public, max-age=300",
+        "/rpm/pool/(.*)": "public, max-age=300",
     }
 
 
@@ -91,7 +97,9 @@ def _moving_manifest() -> RootManifest:
 def test_legacy_index_rewrites_address_the_selected_snapshot() -> None:
     """The committed configuration matches a fresh render of the selection."""
 
-    assert VERCEL_PATH.read_bytes() == hosting_config(_moving_manifest())
+    assert VERCEL_PATH.read_bytes() == hosting_config(
+        _moving_manifest(), load_repositories(REPOSITORY_ROOT)
+    )
 
 
 def test_legacy_rewrites_enumerate_exactly_the_published_indexes() -> None:
@@ -147,3 +155,98 @@ def test_tracked_hosting_files_name_only_the_production_hostname() -> None:
 
     assert PRODUCTION_HOSTNAME in text
     assert STALE_HOSTNAME not in text
+
+
+def test_pool_redirect_is_the_single_allowlisted_external_route() -> None:
+    repositories = load_repositories(REPOSITORY_ROOT)
+    assert _vercel_config()["redirects"] == [
+        {
+            "source": "/:format(apt|rpm)/pool/:repo("
+            + "|".join(repo.split("/")[1] for repo in repositories)
+            + ")/:tag/:asset",
+            "destination": "https://github.com/gelstable/:repo/releases/download/:tag/:asset",
+            "permanent": False,
+        }
+    ]
+    custom = tomllib.loads(
+        hosting_config(_moving_manifest(), ("gelstable/gel-cli",)).decode()
+    )
+    assert (
+        custom["redirects"][0]["source"]
+        == "/:format(apt|rpm)/pool/:repo(gel-cli)/:tag/:asset"
+    )
+
+
+@pytest.mark.native_tools
+def test_configured_signed_tree_validates_and_rejects_static_drift(
+    tmp_path: Path,
+) -> None:
+    import shutil
+
+    from gel_registry.validation import validate_local
+
+    for name in (
+        "upstream",
+        "bootstrap",
+        "releases",
+        "pointers",
+        "sources",
+        "public",
+        "native",
+    ):
+        source = REPOSITORY_ROOT / name
+        if source.exists():
+            shutil.copytree(source, tmp_path / name)
+    shutil.copy2(VERCEL_PATH, tmp_path / "vercel.toml")
+    report = validate_local(tmp_path)
+    assert report.ok, report.errors
+    assert "native.integrity" in report.checks
+    for relative in (
+        "gelstable.sources",
+        "gelstable.repo",
+        "gelstable-testing.sources",
+        "gelstable-testing.repo",
+        "keys/gelstable.fingerprint",
+        "unknown-file",
+    ):
+        path = tmp_path / "public" / relative
+        previous = path.read_bytes() if path.exists() else None
+        path.write_bytes(b"unexpected\n")
+        report = validate_local(tmp_path)
+        assert not report.ok
+        assert any(f"public/{relative}" in error for error in report.errors)
+        if previous is None:
+            path.unlink()
+        else:
+            path.write_bytes(previous)
+
+
+def test_dotted_pool_repository_is_literal() -> None:
+    custom = tomllib.loads(
+        hosting_config(_moving_manifest(), ("gelstable/gel.extra",)).decode()
+    )
+    rule = custom["redirects"][0]
+    assert rule["source"] == r"/:format(apt|rpm)/pool/:repo(gel\.extra)/:tag/:asset"
+    assert (
+        rule["destination"]
+        == "https://github.com/gelstable/:repo/releases/download/:tag/:asset"
+    )
+    assert rule["permanent"] is False
+
+
+@pytest.mark.parametrize(
+    "repository",
+    [
+        "other/gel.extra",
+        "gelstable/..",
+        "gelstable/gel/extra",
+        "gelstable/gel%2eextra",
+        "gelstable/gel|extra",
+        "gelstable/gel\\extra",
+    ],
+)
+def test_unsafe_pool_repository_is_rejected(repository: str) -> None:
+    from gel_registry.render.errors import RenderError
+
+    with pytest.raises(RenderError, match="unsupported pool repository"):
+        hosting_config(_moving_manifest(), (repository,))

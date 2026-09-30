@@ -42,4 +42,33 @@ Routine offboarding requires no secret rotation (maintainers hold no shared toke
 Maintainers must enforce two critical repository invariants:
 
 - **Registry Immutability**: `public/s/` (snapshots) and `public/i/` (blobs) are immutable. `bootstrap/` and capture evidence are frozen. Reject any PR modifying existing bytes in these paths. Rollbacks must be pointer updates, not file edits (see `docs/operations.md`).
-- **Static Infrastructure Contract**: Review Terraform plan comments, not just source diffs. Reject any resource introducing compute (functions, ISR, rewrites, redirects, build commands) to preserve the static hosting security model.
+- **Static Infrastructure Contract**: Review Terraform plan comments, not just source diffs. Reject compute, build commands, and routing outside the generated legacy index rewrites and the single allowlisted package-pool redirect. Package clients verify downloads against signed metadata.
+
+## Native repository keys and clients
+
+`public/keys/gelstable.asc` is the public certificate; its primary fingerprint
+is generated in `public/keys/gelstable.fingerprint`. The current certificate is
+**disposable development material**, and its private material has been deleted.
+Replace it with the production certificate and re-sign all APT and RPM metadata
+before merging for production. Never commit private keys.
+
+Render metadata with `gel-registry native render --repo . --cache DIR --out public`.
+Sign with an isolated `GNUPGHOME` and the full signing subkey fingerprint in
+`GELSTABLE_SIGNING_FPR`, then run `gel-registry native sign --repo .`.
+Regenerate hosting configuration and support files with
+`gel-registry publish-bootstrap --repo .`. When replacing the certificate,
+remove its old generated fingerprint before regenerating. Validate the complete committed tree
+with `gel-registry validate --repo .`.
+
+The generated `gelstable.sources` and `gelstable.repo` select stable. The testing
+APT source is a separate `gelstable-testing.sources`; the testing DNF section
+in `gelstable-testing.repo` starts disabled. Both clients use the same public
+certificate, require repository signatures, and verify package checksums.
+Install the APT certificate at `/etc/apt/keyrings/gelstable.asc` and compare its
+fingerprint with the published fingerprint before installing the source file.
+
+A preview deployment must serve `/apt/dists/stable/InRelease` and return a 307
+from an allowlisted `/apt/pool/<repo>/<tag>/<asset>` URL to its GitHub release
+asset. Also check metadata, key, and pool cache headers and reject unknown
+repositories. Deployment acceptance is pending; local configuration checks do
+not exercise the hosting provider.

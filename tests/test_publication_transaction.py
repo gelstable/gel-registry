@@ -125,6 +125,10 @@ def test_publication_installs_exactly_the_generated_support_files(
             (
                 *MUTABLE_PATHS,
                 "public/healthz",
+                "public/gelstable.sources",
+                "public/gelstable.repo",
+                "public/gelstable-testing.sources",
+                "public/gelstable-testing.repo",
                 f"public/i/{identity}.json",
                 f"public/s/{result.snapshot}/registry.json",
                 "public/v1/schema/capture.json",

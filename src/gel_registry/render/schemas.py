@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -83,6 +85,63 @@ def _support_documents() -> tuple[tuple[str, bytes], ...]:
     )
 
 
+def _client_documents(public: Path) -> list[tuple[Path, bytes]]:
+    documents: list[tuple[Path, bytes]] = []
+    for channel in ("stable", "testing"):
+        stem = "gelstable" + ("-testing" if channel == "testing" else "")
+        apt = (
+            "Types: deb\nURIs: https://registry.gelstable.com/apt\n"
+            f"Suites: {channel}\nComponents: main\n"
+            "Signed-By: /etc/apt/keyrings/gelstable.asc\n"
+        )
+        rpm = (
+            f"[{stem}]\nname=Gelstable"
+            + (" Testing" if channel == "testing" else "")
+            + f"\nbaseurl=https://registry.gelstable.com/rpm/{channel}/$basearch\n"
+            + f"enabled={0 if channel == 'testing' else 1}\n"
+            + "gpgcheck=1\nrepo_gpgcheck=1\n"
+            + "gpgkey=https://registry.gelstable.com/keys/gelstable.asc\n"
+        )
+        documents.extend(
+            (
+                (public / f"{stem}.sources", apt.encode()),
+                (public / f"{stem}.repo", rpm.encode()),
+            )
+        )
+    key = public / "keys/gelstable.asc"
+    if key.exists() or key.is_symlink():
+        if key.is_symlink() or not key.is_file():
+            raise RenderError(f"public key is not a regular file: {key}")
+        with tempfile.TemporaryDirectory(prefix="registry-key-") as home:
+            result = subprocess.run(
+                [
+                    "gpg",
+                    "--batch",
+                    "--no-options",
+                    "--homedir",
+                    home,
+                    "--with-colons",
+                    "--show-keys",
+                    str(key.resolve()),
+                ],
+                capture_output=True,
+                check=False,
+            )
+        if result.returncode:
+            raise RenderError("could not inspect public signing key")
+        fingerprints = [
+            line.split(":")[9]
+            for line in result.stdout.decode().splitlines()
+            if line.startswith("fpr:")
+        ]
+        if not fingerprints:
+            raise RenderError("public signing key has no fingerprint")
+        documents.append(
+            (public / "keys/gelstable.fingerprint", (fingerprints[0] + "\n").encode())
+        )
+    return documents
+
+
 def render_schemas(repo: Path, *, allow_release_record_migration: bool = False) -> None:
     """Install canonical public JSON Schemas and the static health response.
 
@@ -104,7 +163,7 @@ def render_schemas(repo: Path, *, allow_release_record_migration: bool = False) 
     targets = tuple(
         (schema_dir / name if name != "../healthz" else public / "healthz", data)
         for name, data in documents
-    )
+    ) + tuple(_client_documents(public))
     replacements: set[Path] = set()
     for path, data in targets:
         if path.is_symlink():

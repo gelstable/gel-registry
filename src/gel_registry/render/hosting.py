@@ -20,6 +20,7 @@ from typing import Any
 import tomli_w
 
 from ..contracts import RootManifest
+from ..contracts.release import validate_repository_name
 from .errors import RenderError
 
 MOVING_CACHE_CONTROL = (
@@ -32,6 +33,11 @@ _CACHE_POLICY = (
     ("/s/(.*)", PINNED_CACHE_CONTROL),
     ("/registry.json", MOVING_CACHE_CONTROL),
     ("/v1/(.*)", MOVING_CACHE_CONTROL),
+    ("/apt/dists/(.*)", "public, max-age=0, s-maxage=60"),
+    ("/rpm/(.*)", "public, max-age=0, s-maxage=60"),
+    ("/keys/(.*)", PINNED_CACHE_CONTROL),
+    ("/apt/pool/(.*)", "public, max-age=300"),
+    ("/rpm/pool/(.*)", "public, max-age=300"),
 )
 
 #: Legacy index paths carry the channel as a filename suffix: ``stable`` has
@@ -92,11 +98,35 @@ def legacy_rewrites(manifest: RootManifest) -> tuple[dict[str, str], ...]:
     return tuple(rules)
 
 
-def hosting_config(manifest: RootManifest) -> bytes:
+def hosting_config(manifest: RootManifest, repositories: tuple[str, ...] = ()) -> bytes:
     """Render the complete hosting configuration for one selected snapshot."""
 
     rewrites = legacy_rewrites(manifest)
-    total = len(_CACHE_POLICY) + len(rewrites)
+    names = []
+    for repository in repositories:
+        try:
+            validate_repository_name(repository)
+            owner, name = repository.split("/")
+            if owner != "gelstable":
+                raise ValueError("unsupported pool owner")
+        except ValueError as exc:
+            raise RenderError(f"unsupported pool repository: {repository}") from exc
+        # Hyphens are literal outside character classes; preserve existing routes.
+        names.append(re.escape(name).replace(r"\-", "-"))
+    redirects = (
+        [
+            {
+                "source": (
+                    f"/:format(apt|rpm)/pool/:repo({'|'.join(names)})/:tag/:asset"
+                ),
+                "destination": "https://github.com/gelstable/:repo/releases/download/:tag/:asset",
+                "permanent": False,
+            }
+        ]
+        if names
+        else []
+    )
+    total = len(_CACHE_POLICY) + len(rewrites) + len(redirects)
     if total > MAX_ROUTES:
         raise RenderError(
             f"hosting configuration declares {total} routes, "
@@ -111,6 +141,8 @@ def hosting_config(manifest: RootManifest) -> bytes:
         ],
         "rewrites": list(rewrites),
     }
+    if redirects:
+        config["redirects"] = redirects
     return tomli_w.dumps(config).encode("utf-8")
 
 

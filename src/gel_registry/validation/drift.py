@@ -167,7 +167,7 @@ def _compare_file_bytes(
 
 def _copy_render_inputs(repo: Path, stage: Path) -> None:
     stage.mkdir(parents=True)
-    for name in ("upstream", "bootstrap", "releases", "pointers"):
+    for name in ("upstream", "bootstrap", "releases", "pointers", "sources"):
         source = repo / name
         destination = stage / name
         if source.is_symlink():
@@ -193,3 +193,12 @@ def _copy_render_inputs(repo: Path, stage: Path) -> None:
             )
         elif pinned.is_dir():
             shutil.copytree(pinned, stage / "public" / name, symlinks=True)
+
+    key = repo / "public/keys/gelstable.asc"
+    if key.exists() or key.is_symlink():
+        target = stage / "public/keys/gelstable.asc"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if key.is_symlink():
+            target.symlink_to(key.readlink())
+        else:
+            shutil.copy2(key, target)
