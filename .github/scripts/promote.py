@@ -3,15 +3,19 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
+import tarfile
 from collections.abc import Callable, Sequence
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 ALLOWED_PREFIXES = (
     "releases/",
     "pointers/",
     "public/",
+    "native/",
 )
 ALLOWED_EXACT = frozenset({"vercel.toml"})
 BRANCH = "promote/registry"
@@ -43,7 +47,9 @@ def _remote_oid(run: Runner) -> str:
     return output.split("\t", maxsplit=1)[0].strip() if output else ""
 
 
-def _candidate_body(added: Sequence[str], rejected: Sequence[object]) -> str:
+def _candidate_body(
+    added: Sequence[str], rejected: Sequence[object], native_diff: str = ""
+) -> str:
     added_lines = [f"- `{path}`" for path in added]
     rejected_lines = [
         "- " + json.dumps(item, sort_keys=True)
@@ -57,6 +63,15 @@ def _candidate_body(added: Sequence[str], rejected: Sequence[object]) -> str:
             "",
             "## Rejected releases",
             *(rejected_lines or ["- None"]),
+            "",
+            "## Native package lock changes",
+            "```diff",
+            *(
+                line
+                for line in native_diff.splitlines()
+                if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+            ),
+            "```",
         ]
     )
 
@@ -116,8 +131,10 @@ def _delete_candidate_and_close_pr(run: Runner, observed_oid: str) -> None:
         run(["gh", "pr", "close", str(number)])
 
 
-def main(*, run: Runner = _run) -> None:
-    """Rebuild, publish, and describe the one rolling promotion candidate."""
+def build(
+    *, run: Runner = _run, cache: str = "/tmp/gel-registry-packages"
+) -> dict[str, Any]:
+    """Discover and render unsigned data, without any remote mutation."""
     if run(["git", "status", "--porcelain", "--untracked-files=all"]):
         raise RuntimeError("checkout is not clean")
     observed_oid = _remote_oid(run)
@@ -137,14 +154,43 @@ def main(*, run: Runner = _run) -> None:
     run(["git", "switch", "--detach", "origin/main"])
     run(["git", "switch", "-C", BRANCH])
     result: Any = json.loads(run(["gel-registry", "build-candidate", "--repo", "."]))
+    native = run(
+        [
+            "gel-registry",
+            "native",
+            "render",
+            "--repo",
+            ".",
+            "--cache",
+            cache,
+            "--out",
+            "public",
+        ]
+    )
     changed = _paths_from_status(
         run(["git", "status", "--porcelain", "--untracked-files=all", "--ignored=no"])
     )
     _validate_paths(changed, description="candidate")
+    return {
+        "base_oid": run(["git", "rev-parse", "HEAD"]).strip(),
+        "observed_oid": observed_oid,
+        "rejected": result.get("rejected", []),
+        "native_changed": native.strip() == "rendered"
+        or any(path.startswith(("public/apt/", "public/rpm/")) for path in changed),
+    }
+
+
+def publish(result: dict[str, Any], *, run: Runner = _run) -> None:
+    """Validate signed data and update the disposable candidate and PR."""
+    changed = _paths_from_status(
+        run(["git", "status", "--porcelain", "--untracked-files=all", "--ignored=no"])
+    )
+    _validate_paths(changed, description="candidate")
+    observed_oid = result["observed_oid"]
     if not changed:
         _delete_candidate_and_close_pr(run, observed_oid)
         return
-
+    run(["gel-registry", "validate", "--repo", "."])
     run(["git", "add", "--", *ALLOWED_PREFIXES, *sorted(ALLOWED_EXACT)])
     staged = run(["git", "diff", "--name-only", "--cached"]).splitlines()
     _validate_paths(staged, description="staged candidate")
@@ -176,8 +222,108 @@ def main(*, run: Runner = _run) -> None:
             f"HEAD:refs/heads/{BRANCH}",
         ]
     )
-    _update_pr(run, _candidate_body(added, result.get("rejected", [])))
+    native_diff = run(
+        [
+            "git",
+            "diff",
+            "--unified=0",
+            "origin/main...HEAD",
+            "--",
+            "native/packages.lock.json",
+        ]
+    )
+    _update_pr(run, _candidate_body(added, result.get("rejected", []), native_diff))
+
+
+def write_artifact(
+    destination: Path, result: dict[str, Any], *, run: Runner = _run
+) -> None:
+    """Transfer only changed generated files, plus explicit deletions."""
+    status = run(
+        ["git", "status", "--porcelain", "--untracked-files=all", "--ignored=no"]
+    )
+    changed = _paths_from_status(status)
+    _validate_paths(changed, description="artifact")
+    destination.mkdir(parents=True, exist_ok=True)
+    deleted = []
+    with tarfile.open(destination / "candidate.tar", "w") as archive:
+        for path in changed:
+            source = Path(path)
+            if source.is_symlink():
+                raise RuntimeError(f"artifact path is a symlink: {path}")
+            if source.exists():
+                if not source.is_file():
+                    raise RuntimeError(f"artifact path is not a file: {path}")
+                archive.add(source, arcname=path, recursive=False)
+            else:
+                deleted.append(path)
+    (destination / "deleted.json").write_text(json.dumps(deleted) + "\n")
+    (destination / "result.json").write_text(json.dumps(result, sort_keys=True) + "\n")
+
+
+def _safe_path(path: str) -> Path:
+    parts = PurePosixPath(path)
+    if (
+        parts.is_absolute()
+        or ".." in parts.parts
+        or str(parts) != path
+        or not _allowed(path)
+    ):
+        raise RuntimeError(f"unexpected artifact path: {path}")
+    target = Path(path)
+    if target.is_symlink() or any(parent.is_symlink() for parent in target.parents):
+        raise RuntimeError(f"artifact path traverses symlink: {path}")
+    return target
+
+
+def apply_artifact(source: Path, *, run: Runner = _run) -> dict[str, Any]:
+    """Apply a validated artifact only to the exact clean default-branch base."""
+    result: dict[str, Any] = json.loads((source / "result.json").read_text())
+    if run(["git", "status", "--porcelain", "--untracked-files=all"]):
+        raise RuntimeError("checkout is not clean")
+    if run(["git", "rev-parse", "HEAD"]).strip() != result["base_oid"]:
+        raise RuntimeError("default branch changed after render; rerun promotion")
+    deleted = json.loads((source / "deleted.json").read_text())
+    with tarfile.open(source / "candidate.tar") as archive:
+        members = archive.getmembers()
+        for member in members:
+            _safe_path(member.name)
+            if not member.isfile():
+                raise RuntimeError(
+                    f"artifact member is not a regular file: {member.name}"
+                )
+        for path in deleted:
+            _safe_path(path)
+        # Validate all names and types before mutating the checkout. The data
+        # filter additionally rejects unsafe modes and archive links.
+        for path in deleted:
+            _safe_path(path).unlink(missing_ok=True)
+        archive.extractall(filter="data")
+    return result
+
+
+def main(*, run: Runner = _run) -> None:
+    """Local orchestration retained for the portable promotion contract tests."""
+    publish(build(run=run), run=run)
+
+
+def cli() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("phase", choices=("build", "apply", "publish"))
+    parser.add_argument("--artifact", type=Path, required=True)
+    parser.add_argument("--cache", default="/tmp/gel-registry-packages")
+    args = parser.parse_args()
+    if args.phase == "build":
+        write_artifact(args.artifact, build(cache=args.cache))
+    elif args.phase == "apply":
+        result = apply_artifact(args.artifact)
+        print("sign" if result["native_changed"] else "unchanged")
+    else:
+        result = json.loads((args.artifact / "result.json").read_text())
+        if _run(["git", "rev-parse", "HEAD"]).strip() != result["base_oid"]:
+            raise RuntimeError("candidate base differs from render base")
+        publish(result)
 
 
 if __name__ == "__main__":
-    main()
+    cli()

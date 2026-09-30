@@ -703,3 +703,135 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
     assert not any(_is_git_subcommand(cmd, "commit") for cmd in recorder3.commands)
     assert not any(cmd[:2] == ["git", "push"] for cmd in recorder3.commands)
     assert not any(cmd[:3] == ["gh", "pr"] for cmd in recorder3.commands)
+
+
+def test_build_has_no_signing_or_remote_mutations(promote: PromotionScript) -> None:
+    recorder = Recorder(_responses())
+    result = promote.build(run=recorder, cache="/tmp/cache")  # type: ignore[attr-defined]
+    assert result["rejected"] == []
+    assert [
+        "gel-registry",
+        "native",
+        "render",
+        "--repo",
+        ".",
+        "--cache",
+        "/tmp/cache",
+        "--out",
+        "public",
+    ] in recorder.commands
+    assert not any(command[:2] == ["git", "push"] for command in recorder.commands)
+    assert not any(command[:2] == ["gh", "pr"] for command in recorder.commands)
+    assert not any(
+        _is_git_subcommand(command, "commit") for command in recorder.commands
+    )
+    assert not any(
+        command[:2] == ["gel-registry", "validate"] for command in recorder.commands
+    )
+
+
+def test_publish_validates_before_committing_and_never_downloads(
+    promote: PromotionScript,
+) -> None:
+    recorder = Recorder(_responses())
+    promote.publish({"observed_oid": "abc123", "rejected": []}, run=recorder)  # type: ignore[attr-defined]
+    validate = recorder.commands.index(["gel-registry", "validate", "--repo", "."])
+    commit = next(
+        i
+        for i, cmd in enumerate(recorder.commands)
+        if _is_git_subcommand(cmd, "commit")
+    )
+    assert validate < commit
+    assert not any(
+        command[:2] == ["gel-registry", "build-candidate"]
+        or command[:3] == ["gel-registry", "native", "render"]
+        for command in recorder.commands
+    )
+
+
+def test_artifact_roundtrip_and_stale_base_rejection(
+    promote: PromotionScript, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    artifact = tmp_path / "artifact"
+    builder = tmp_path / "builder"
+    builder.mkdir()
+    monkeypatch.chdir(builder)
+    (builder / "native").mkdir()
+    (builder / "native/packages.lock.json").write_text("[]\n")
+    recorder = Recorder(
+        _responses(status="?? native/packages.lock.json\n D public/old.json\n")
+    )
+    result = {"base_oid": "base", "observed_oid": "abc123", "native_changed": True}
+    promote.write_artifact(artifact, result, run=recorder)  # type: ignore[attr-defined]
+    checkout = tmp_path / "checkout"
+    (checkout / "public").mkdir(parents=True)
+    (checkout / "public/old.json").write_text("old")
+    monkeypatch.chdir(checkout)
+    stale = Recorder({("git", "rev-parse", "HEAD"): "new-base\n"})
+    with pytest.raises(RuntimeError, match="default branch changed"):
+        promote.apply_artifact(artifact, run=stale)  # type: ignore[attr-defined]
+    assert (checkout / "public/old.json").exists()
+    current = Recorder({("git", "rev-parse", "HEAD"): "base\n"})
+    assert promote.apply_artifact(artifact, run=current) == result  # type: ignore[attr-defined]
+    assert (checkout / "native/packages.lock.json").read_text() == "[]\n"
+    assert not (checkout / "public/old.json").exists()
+
+
+@pytest.mark.parametrize(
+    "name,link", [("../escaped", False), ("src/code.py", False), ("public/link", True)]
+)
+def test_unsafe_artifact_rejected_before_deletions(
+    promote: PromotionScript,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    link: bool,
+) -> None:
+    import io
+    import tarfile
+
+    artifact = tmp_path / "artifact"
+    artifact.mkdir()
+    (artifact / "result.json").write_text('{"base_oid": "base"}')
+    (artifact / "deleted.json").write_text('["public/keep"]')
+    with tarfile.open(artifact / "candidate.tar", "w") as archive:
+        member = tarfile.TarInfo(name)
+        if link:
+            member.type = tarfile.SYMTYPE
+            member.linkname = "../../escaped"
+            archive.addfile(member)
+        else:
+            member.size = 4
+            archive.addfile(member, io.BytesIO(b"evil"))
+    checkout = tmp_path / "checkout"
+    (checkout / "public").mkdir(parents=True)
+    (checkout / "public/keep").write_text("keep")
+    monkeypatch.chdir(checkout)
+    recorder = Recorder({("git", "rev-parse", "HEAD"): "base\n"})
+    with pytest.raises(RuntimeError, match="artifact"):
+        promote.apply_artifact(artifact, run=recorder)  # type: ignore[attr-defined]
+    assert (checkout / "public/keep").read_text() == "keep"
+
+
+def test_native_lock_diff_is_in_pr_body(promote: PromotionScript) -> None:
+    responses = _responses()
+    responses[
+        (
+            "git",
+            "diff",
+            "--unified=0",
+            "origin/main...HEAD",
+            "--",
+            "native/packages.lock.json",
+        )
+    ] = (
+        "--- a/native/packages.lock.json\n+++ b/native/packages.lock.json\n"
+        '-    "name": "gel-old",\n+    "name": "gel-cli",\n'
+    )
+    recorder = Recorder(responses)
+    promote.main(run=recorder)
+    create = next(cmd for cmd in recorder.commands if cmd[:3] == ["gh", "pr", "create"])
+    body = create[-1]
+    assert '-    "name": "gel-old",' in body
+    assert '+    "name": "gel-cli",' in body
+    assert "--- a/native" not in body

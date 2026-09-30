@@ -32,6 +32,39 @@ This ensures that an earlier unmerged release is never lost or orphaned when sub
 
 The automated pipeline is defined in `.github/workflows/promote.yml` and driven by `.github/scripts/promote.py`.
 
+### Render and signing boundary
+
+The `render` job has `contents: read` and no signing secrets. It discovers
+release records, renders the portable snapshot, and runs `native render` with
+APT/RPM tools. Its SHA-256 package cache is restored with a key derived from
+all committed `releases/**/*.json` files; restored bytes are always verified.
+The scratch package pool and package cache are excluded from the artifact.
+
+`promote.py build --cache <cache> --artifact <directory>` produces three files:
+`candidate.tar` contains only changed allowed regular files, `deleted.json`
+lists removed paths, and `result.json` carries the base commit, observed
+candidate commit, rejected releases, and whether native metadata needs signing.
+This phase does not validate signatures on unsigned metadata.
+
+The `publish` job runs only from the default branch in the `registry-signing`
+Environment, with `contents: write` and `pull-requests: write`. It checks out
+the default branch and runs `promote.py apply --artifact <directory>` to verify
+that its base commit exactly matches the render base, validate archive paths
+and types, and apply generated files and deletions. If `main` advanced between
+jobs, promotion aborts; rerun it against the new base.
+
+When native metadata changed, the job imports `REGISTRY_SIGNING_KEY` into a
+temporary `GNUPGHOME`, selects `REGISTRY_SIGNING_FPR`, and runs `native sign`.
+Signing immediately verifies each signature against the committed public key.
+An exit trap deletes the key home, including on failure, before the next step.
+The signing job receives metadata only and never downloads or parses package
+files. Unchanged native metadata keeps its existing signatures.
+
+Finally, `promote.py publish --artifact <directory>` validates the complete
+signed candidate before committing, pushes with the original observed lease,
+and creates or updates the PR. No-change candidates retain the existing
+branch deletion and PR closure behavior.
+
 ### Fixed Branch and Pull Request
 
 - **Fixed Branch**: `refs/heads/promote/registry`
@@ -76,6 +109,7 @@ Candidate generation permits modifications **only** within generated distributio
 - `releases/**`: Immutable release records (`releases/<owner>/<repository>/<release-id>.json`).
 - `pointers/**`: Selection pointers (`pointers/latest.json`).
 - `public/**`: Rendered distribution files, schemas, and content-addressed blobs.
+- `native/**`: Native package lock and yank policy.
 - `vercel.toml`: Static hosting configuration generated from the selected snapshot.
 
 Any change to code (`src/`), workflow files (`.github/`), test suites (`tests/`), or documentation aborts the promotion script immediately before any commit or push occurs.
@@ -84,7 +118,7 @@ Any change to code (`src/`), workflow files (`.github/`), test suites (`tests/`)
 
 ## PR Review and Approval
 
-When reviewing the rolling promotion PR (`data: promote registry releases`), maintainers should verify two primary sections of the PR summary:
+When reviewing the rolling promotion PR (`data: promote registry releases`), maintainers should verify three sections of the PR summary:
 
 1. **Promoted Release Records**:
    - Inspect the added records in `releases/<owner>/<repository>/<release-id>.json`.
@@ -94,6 +128,10 @@ When reviewing the rolling promotion PR (`data: promote registry releases`), mai
 2. **Rejected Releases**:
    - The PR description lists any non-draft releases bearing invalid or unparseable `gel-registry.json` manifests, along with the deterministic reason for rejection.
    - If an expected release appears under the rejections list, notify the product team to inspect the reason (e.g., missing asset, syntax error, or URL mismatch) and publish a corrected GitHub release.
+
+3. **Native Package Lock Changes**:
+   - Review every added and removed line of `native/packages.lock.json` in the PR body.
+   - Confirm package names, versions, channels, architectures, digests, and pool paths.
 
 ---
 

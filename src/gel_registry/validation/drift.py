@@ -118,6 +118,17 @@ def _compare_tree_bytes(
     except (OSError, ValueError) as exc:
         collector.add(check, display_path(repo, committed), str(exc))
         return
+
+    # Native metadata has its own complete inventory, checksum, and signature
+    # gate. Portable rendering cannot reproduce it without package downloads
+    # and signing secrets. The committed verification key is a native input.
+    def portable(path: str) -> bool:
+        return not path.startswith(("apt/", "rpm/")) and path != "keys/gelstable.asc"
+
+    fresh_files = {path: data for path, data in fresh_files.items() if portable(path)}
+    committed_files = {
+        path: data for path, data in committed_files.items() if portable(path)
+    }
     for relative in sorted(set(fresh_files) - set(committed_files)):
         collector.add(
             check,
