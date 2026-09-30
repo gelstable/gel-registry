@@ -13,7 +13,7 @@ from typing import cast
 
 import httpx
 
-from . import candidate, capture, normalize, publication, render, validation
+from . import candidate, capture, native, normalize, publication, render, validation
 from .constants import CAPTURE_ID
 from .contracts import CaptureManifest
 from .digest import canonical_json
@@ -206,9 +206,26 @@ def _run_validate(args: argparse.Namespace) -> int:
     return _print_report(report)
 
 
+def _run_native_render(args: argparse.Namespace) -> int:
+    changed = native.render_native(
+        Path(args.repo), Path(args.cache), Path(args.out), args.base_url
+    )
+    print("rendered" if changed else "unchanged")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gel-registry")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    native_parser = commands.add_parser("native", help="native package repositories")
+    native_commands = native_parser.add_subparsers(required=True)
+    native_render = native_commands.add_parser("render")
+    _add_repo(native_render)
+    native_render.add_argument("--cache", required=True, type=Path)
+    native_render.add_argument("--out", required=True, type=Path)
+    native_render.add_argument("--base-url", default="https://registry.gelstable.com")
+    native_render.set_defaults(handler=_run_native_render)
 
     capture_parser = commands.add_parser("capture", help="capture legacy indexes")
     _add_repo(capture_parser)
