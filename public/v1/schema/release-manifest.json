@@ -107,6 +107,62 @@
         }
       ]
     },
+    "NativePackage": {
+      "additionalProperties": false,
+      "description": "A native package asset with its publisher-provided digest and size.",
+      "properties": {
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "minimum": 0,
+          "title": "Size",
+          "type": "integer"
+        },
+        "url": {
+          "minLength": 1,
+          "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*\\.(deb|rpm)$",
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha256",
+        "url",
+        "size"
+      ],
+      "title": "NativePackage",
+      "type": "object"
+    },
+    "NativeSection": {
+      "additionalProperties": false,
+      "description": "Native assets destined for one distribution channel.",
+      "properties": {
+        "channel": {
+          "enum": [
+            "stable",
+            "testing"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "packages": {
+          "items": {
+            "$ref": "#/$defs/NativePackage"
+          },
+          "title": "Packages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "channel",
+        "packages"
+      ],
+      "title": "NativeSection",
+      "type": "object"
+    },
     "PackageEntry": {
       "additionalProperties": false,
       "description": "One package and all install references represented by an index.",
@@ -249,6 +305,24 @@
     }
   },
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 1
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "native"
+          ]
+        }
+      }
+    }
+  ],
   "anyOf": [
     {
       "properties": {
@@ -269,6 +343,28 @@
       "required": [
         "indexes"
       ]
+    },
+    {
+      "properties": {
+        "native": {
+          "properties": {
+            "packages": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "packages"
+          ],
+          "type": "object"
+        },
+        "schema_version": {
+          "const": 2
+        }
+      },
+      "required": [
+        "schema_version",
+        "native"
+      ]
     }
   ],
   "description": "The direct package changes produced for one upstream release.",
@@ -281,6 +377,17 @@
       "title": "Indexes",
       "type": "array"
     },
+    "native": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NativeSection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "replacements": {
       "default": [],
       "items": {
@@ -290,8 +397,11 @@
       "type": "array"
     },
     "schema_version": {
-      "const": 1,
       "default": 1,
+      "enum": [
+        1,
+        2
+      ],
       "title": "Schema Version",
       "type": "integer"
     }

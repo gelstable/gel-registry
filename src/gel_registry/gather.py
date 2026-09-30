@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,7 +40,11 @@ def load_repositories(repo: Path) -> tuple[str, ...]:
     """Load the canonical repository allowlist."""
     raw = (repo / "sources" / "github.json").read_bytes()
     data = json.loads(raw)
-    if not isinstance(data, dict) or data.get("schema_version") != 1:
+    if (
+        not isinstance(data, dict)
+        or type(data.get("schema_version")) is not int
+        or data["schema_version"] not in (1, 2)
+    ):
         raise ValueError("GitHub source allowlist has an unsupported schema version")
     repositories = data.get("repositories")
     if (
@@ -55,7 +60,25 @@ def load_repositories(repo: Path) -> tuple[str, ...]:
             raise ValueError(
                 f"GitHub source allowlist has invalid repository: {exc}"
             ) from exc
-    if raw != canonical_json({"repositories": repositories, "schema_version": 1}):
+    expected = {"repositories": repositories, "schema_version": data["schema_version"]}
+    if data["schema_version"] == 2:
+        names = data.get("native_package_names")
+        if not isinstance(names, dict) or set(names) != set(repositories):
+            raise ValueError("GitHub source allowlist has invalid native package names")
+        for patterns in names.values():
+            if not isinstance(patterns, list) or not patterns:
+                raise ValueError(
+                    "native package name allowlists must be nonempty lists"
+                )
+            for pattern in patterns:
+                if not isinstance(pattern, str):
+                    raise ValueError("native package name patterns must be strings")
+                try:
+                    re.compile(pattern)
+                except re.error as exc:
+                    raise ValueError("invalid native package name pattern") from exc
+        expected["native_package_names"] = names
+    if raw != canonical_json(expected):
         raise ValueError("GitHub source allowlist is not canonical")
     return tuple(repositories)
 

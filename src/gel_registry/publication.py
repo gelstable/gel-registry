@@ -23,10 +23,10 @@ from .digest import canonical_json
 from .render import (
     RenderError,
     build_snapshot,
-    is_approved_release_record_predecessor,
     render_schemas,
     select_snapshot,
 )
+from .render.schemas import is_approved_release_schema_predecessor
 
 _SOURCE_ROOTS = ("bootstrap", "releases", "pointers", "public")
 _MUTABLE_PATHS = frozenset(
@@ -46,7 +46,12 @@ _MOVING_PATHS = (
 #: Generated files that sit at the repository root rather than inside one of
 #: the source families, because the host reads them from there.
 _ROOT_FILES = ("vercel.toml",)
-_MIGRATED_SUPPORT_PATH = "public/v1/schema/release-record.json"
+_MIGRATED_SUPPORT_PATHS = frozenset(
+    {
+        "public/v1/schema/release-manifest.json",
+        "public/v1/schema/release-record.json",
+    }
+)
 _SUPPORT_PATHS = frozenset(
     {
         "public/healthz",
@@ -212,7 +217,7 @@ def _is_mutable(relative: str) -> bool:
 
 
 def _is_migrated_support(relative: str) -> bool:
-    return relative == _MIGRATED_SUPPORT_PATH
+    return relative in _MIGRATED_SUPPORT_PATHS
 
 
 def _allowed_addition(relative: str, snapshot: str) -> bool:
@@ -272,7 +277,9 @@ def _compare_family(
                 raise PublicationError(
                     f"migrated support path became a directory: {full}"
                 )
-            if left is None or not is_approved_release_record_predecessor(left):
+            if left is None or not is_approved_release_schema_predecessor(
+                Path(full).name, left
+            ):
                 raise PublicationError(f"immutable path changed: {full}")
             changed.add(full)
             continue

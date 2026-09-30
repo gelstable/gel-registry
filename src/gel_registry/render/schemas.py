@@ -38,10 +38,34 @@ _APPROVED_RELEASE_RECORD_PREDECESSORS = {
 }
 
 
-def is_approved_release_record_predecessor(data: bytes) -> bool:
-    """Return whether bytes match the inherited Task 3 release-record schema."""
+_APPROVED_V1_RELEASE_SCHEMAS = {
+    "release-manifest.json": (
+        "f8cd2bf071b472558c275cb4cbeb9041bd4d0b903f125d3392864325b307307b"
+    ),
+    "release-record.json": (
+        "da2442427988f6cc3928d844968395f5db3a82656c9d68333ace352cc46053a3"
+    ),
+}
 
-    return hash_bytes(data) in _APPROVED_RELEASE_RECORD_PREDECESSORS
+
+def is_approved_release_record_predecessor(data: bytes) -> bool:
+    """Return whether bytes match an approved legacy release-record schema."""
+
+    return (
+        hash_bytes(data) in _APPROVED_RELEASE_RECORD_PREDECESSORS
+        or hash_bytes(data).sha256
+        == _APPROVED_V1_RELEASE_SCHEMAS["release-record.json"]
+    )
+
+
+def is_approved_release_schema_predecessor(name: str, data: bytes) -> bool:
+    """Recognize approved predecessor bytes only for their exact schema name."""
+    if name == "release-record.json":
+        return is_approved_release_record_predecessor(data)
+    return (
+        name == "release-manifest.json"
+        and hash_bytes(data).sha256 == _APPROVED_V1_RELEASE_SCHEMAS[name]
+    )
 
 
 def _support_documents() -> tuple[tuple[str, bytes], ...]:
@@ -62,8 +86,9 @@ def _support_documents() -> tuple[tuple[str, bytes], ...]:
 def render_schemas(repo: Path, *, allow_release_record_migration: bool = False) -> None:
     """Install canonical public JSON Schemas and the static health response.
 
-    Bootstrap publication may explicitly opt into the approved release-record
-    schema migration; every other existing support document remains immutable.
+    The existing migration flag also permits the hash-pinned v1 release-manifest
+    and release-record schemas to evolve to v2. Other support documents and
+    unrecognized predecessor bytes remain immutable.
     """
 
     repo = Path(repo)
@@ -80,7 +105,6 @@ def render_schemas(repo: Path, *, allow_release_record_migration: bool = False) 
         (schema_dir / name if name != "../healthz" else public / "healthz", data)
         for name, data in documents
     )
-    release_record_schema = schema_dir / "release-record.json"
     replacements: set[Path] = set()
     for path, data in targets:
         if path.is_symlink():
@@ -93,8 +117,7 @@ def render_schemas(repo: Path, *, allow_release_record_migration: bool = False) 
                 continue
             if not (
                 allow_release_record_migration
-                and path == release_record_schema
-                and is_approved_release_record_predecessor(existing)
+                and is_approved_release_schema_predecessor(path.name, existing)
             ):
                 raise RenderError(f"immutable support document mismatch: {path}")
             replacements.add(path)

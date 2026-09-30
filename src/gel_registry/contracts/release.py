@@ -6,10 +6,18 @@ import posixpath
 import re
 from collections.abc import Iterator
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import unquote, urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from ..digest import canonical_json
 from .common import HEX64, MODEL_CONFIG, StrictString, digest_value, validate_utc
@@ -45,11 +53,60 @@ class IndexFragment(BaseModel):
         return tuple(sorted(value, key=canonical_json))
 
 
+_NATIVE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+class NativePackage(Replacement):
+    """A native package asset with its publisher-provided digest and size."""
+
+    url: StrictString = Field(
+        pattern=(
+            r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+            r"/releases/download/[A-Za-z0-9][A-Za-z0-9._-]*/"
+            r"[A-Za-z0-9][A-Za-z0-9._-]*\.(deb|rpm)$"
+        )
+    )
+    sha256: str = Field(pattern=HEX64.pattern)
+    size: int = Field(strict=True, ge=0)
+
+    @field_validator("url")
+    @classmethod
+    def validate_native_url(cls, value: str) -> str:
+        segments = urlsplit(value).path.split("/")
+        if len(segments) != 7:
+            raise ValueError("native package URL has invalid path structure")
+        tag, asset = segments[5:]
+        if not _NATIVE_COMPONENT.fullmatch(tag):
+            raise ValueError("native release tag must use safe ASCII characters")
+        if not _NATIVE_COMPONENT.fullmatch(asset):
+            raise ValueError("native asset name must use safe ASCII characters")
+        if not asset.endswith((".deb", ".rpm")):
+            raise ValueError("native asset must end in .deb or .rpm")
+        repository = validate_repository_name("/".join(segments[1:3]))
+        validate_release_url(value, repository, tag)
+        return value
+
+
+class NativeSection(BaseModel):
+    """Native assets destined for one distribution channel."""
+
+    model_config = MODEL_CONFIG
+
+    channel: Literal["stable", "testing"]
+    packages: tuple[NativePackage, ...]
+
+
 RELEASE_MANIFEST_CONFIG = ConfigDict(
     extra="forbid",
     frozen=True,
     populate_by_name=True,
     json_schema_extra={
+        "allOf": [
+            {
+                "if": {"properties": {"schema_version": {"const": 1}}},
+                "then": {"not": {"required": ["native"]}},
+            }
+        ],
         "anyOf": [
             {
                 "properties": {"replacements": {"minItems": 1}},
@@ -59,7 +116,18 @@ RELEASE_MANIFEST_CONFIG = ConfigDict(
                 "properties": {"indexes": {"minItems": 1}},
                 "required": ["indexes"],
             },
-        ]
+            {
+                "properties": {
+                    "schema_version": {"const": 2},
+                    "native": {
+                        "type": "object",
+                        "properties": {"packages": {"minItems": 1}},
+                        "required": ["packages"],
+                    },
+                },
+                "required": ["schema_version", "native"],
+            },
+        ],
     },
 )
 
@@ -69,9 +137,30 @@ class ReleaseManifest(BaseModel):
 
     model_config = RELEASE_MANIFEST_CONFIG
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     replacements: tuple[Replacement, ...] = ()
     indexes: tuple[IndexFragment, ...] = ()
+    native: NativeSection | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_native_version(cls, value: Any) -> Any:
+        if (
+            isinstance(value, dict)
+            and value.get("schema_version", 1) == 1
+            and "native" in value
+        ):
+            raise ValueError("native packages require schema_version 2")
+        return value
+
+    @model_serializer(mode="wrap")
+    def serialize_manifest(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        value: dict[str, Any] = handler(self)
+        if self.native is None:
+            value.pop("native", None)
+        return value
 
     @field_validator("replacements")
     @classmethod
@@ -89,8 +178,16 @@ class ReleaseManifest(BaseModel):
 
     @model_validator(mode="after")
     def validate_changes(self) -> ReleaseManifest:
-        if not self.replacements and not self.indexes:
-            raise ValueError("release manifest must contain a replacement or index")
+        if (
+            not self.replacements
+            and not self.indexes
+            and not (self.native and self.native.packages)
+        ):
+            if self.schema_version == 1:
+                raise ValueError("release manifest must contain a replacement or index")
+            raise ValueError(
+                "release manifest must contain a replacement, index, or native package"
+            )
         digests = [replacement.sha256 for replacement in self.replacements]
         if len(digests) != len(set(digests)):
             raise ValueError("release manifest contains duplicate replacement digests")
@@ -236,6 +333,12 @@ class ReleaseRecord(ReleaseManifest):
 
     @model_validator(mode="after")
     def validate_source_urls(self) -> ReleaseRecord:
+        if (
+            self.native
+            and self.native.packages
+            and not _NATIVE_COMPONENT.fullmatch(self.source.tag)
+        ):
+            raise ValueError("native release tag must use safe ASCII characters")
         for url in release_urls(self):
             validate_release_url(url, self.source.repository, self.source.tag)
         return self
@@ -248,3 +351,5 @@ def release_urls(record: ReleaseRecord) -> Iterator[str]:
         for package in fragment.packages:
             yield package.installref
             yield from (reference.ref for reference in package.installrefs)
+    if record.native:
+        yield from (package.url for package in record.native.packages)

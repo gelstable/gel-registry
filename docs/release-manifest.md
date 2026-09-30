@@ -11,7 +11,7 @@ The **sole accepted integration seam** for both regular package releases and leg
 - **`indexes` (Net-New Releases)**: The mechanism for net-new releases. Requires complete client-ready `PackageEntry` definitions (including version details, revision, architecture, slot, and installrefs with sha256, blake2b, and byte size).
 - **Draft Releases Are Invisible**: GitHub releases marked as `draft` are completely invisible to registry discovery; only published non-draft releases are evaluated.
 - **No Rescue-Specific Evidence Ingestion**: The registry never ingests rescue-specific evidence formats, legacy capture manifests, or internal audit logs.
-- **Zero Artifact Downloads or Binary Inspection**: The registry never downloads release binaries, inspects package files, executes decompresors, or parses ELF/Mach-O headers during release promotion.
+- **Portable Artifact Boundary**: For portable releases, the registry never downloads release binaries, inspects package files, executes decompresors, or parses ELF/Mach-O headers during release promotion.
 
 ## Publisher responsibilities and boundary
 
@@ -35,7 +35,7 @@ The boundary between product release workflows and the registry is strictly defi
 - Ensuring rendered public distribution snapshots exactly match committed inputs.
 - Maintaining the cumulative candidate invariant without losing unmerged releases.
 
-There are **no registry-owned product regexes, version parsing rules, or adapter conventions**. The registry does not infer package metadata from filenames, reconstruct package decoration, or download binary artifacts during promotion.
+For portable releases, the registry does not infer package metadata from filenames, reconstruct package decoration, or download binary artifacts during promotion. Native package names are authorized by per-repository regex allowlists in `sources/github.json`.
 
 ---
 
@@ -65,7 +65,7 @@ attach gel-registry.json to the same GitHub release
 
 ## Manifest Format and Examples
 
-A `gel-registry.json` file adheres to schema version 1 and contains:
+A schema version 1 `gel-registry.json` file contains:
 - `schema_version`: Must be `1`.
 - `replacements`: A list of rescue replacements for historical artifacts.
 - `indexes`: A list of channel/platform index fragments containing net-new package entries.
@@ -157,6 +157,45 @@ A net-new manifest supplies complete `PackageEntry` structures for packages adde
   ]
 }
 ```
+
+### Version 2: Native Packages
+
+Schema version `2` retains `replacements` and `indexes` and adds an optional
+`native` section. At least one nonempty `replacements`, `indexes`, or
+`native.packages` list is required. Version 1 continues to accept its existing
+format and does not accept `native`.
+
+`native.channel` is `stable` or `testing`. Each package supplies its GitHub
+release `url`, lowercase hexadecimal `sha256`, and nonnegative integer byte
+`size`. Native assets must exist in the declaring release's asset inventory,
+and their URLs must match its exact repository and tag. Native tags and asset
+names must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`; assets must end in `.deb` or
+`.rpm`. Percent-encoded native names are not accepted. Replace `~` with `-`
+in release tags and asset filenames, while preserving the package's internal
+version metadata.
+
+```json
+{
+  "schema_version": 2,
+  "native": {
+    "channel": "stable",
+    "packages": [
+      {
+        "url": "https://github.com/gelstable/gel-cli/releases/download/pkg-gel-cli-8.0.0-1/gel-cli-8.0.0-1-amd64.deb",
+        "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        "size": 15000000
+      }
+    ]
+  }
+}
+```
+
+The source configuration uses schema version `2` and retains the `repositories`
+list. Its `native_package_names` mapping assigns each repository a list of
+allowed package-name regexes: `^gel-cli$` for `gelstable/gel-cli`,
+`^gel-(server-)?[0-9]+$` for `gelstable/gel`, and
+`^gel-server-[0-9]+-ext-postgis$` for `gelstable/gel-postgis`. These authorize
+names read from package metadata, rather than inferred from asset filenames.
 
 ---
 
