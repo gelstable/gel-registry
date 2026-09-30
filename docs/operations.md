@@ -300,3 +300,241 @@ Registry JSON responds normally, but binary downloads (`installref`) fail.
 3. Verify artifact hashes against recorded digests after recovery.
 
 If both fail, track both incidents independently. Keep last known good Git commit and snapshot ID intact.
+
+## Native package operations
+
+The [installation guide](native-packages.md) documents client setup; the
+[development guide](native-development.md) documents local rendering and fixture
+tests. Native packages add signed APT and RPM metadata to this static registry.
+Package bytes remain GitHub release assets and are excluded from the deployed
+tree. The lock `native/packages.lock.json` records every selected package,
+channel, format, native architecture, full epoch/version/revision, digest, size
+and repository path.
+
+**Launch prerequisite:** the current empty repositories use a disposable
+development certificate, and its private key has been deleted. Complete the
+production key ceremony below and re-sign all metadata before deployment.
+Production smoke and migration acceptance remain pending. Empty-channel skips
+in the acceptance workflow do not demonstrate a successful installation.
+
+### Publish a product release
+
+1. In the product repository (`gel`, `gel-cli`, or `gel-postgis`), run its native
+   packaging workflow from the default branch. The intended pipeline builds
+   packages without secrets, verifies source artifact SHA-256 values, creates
+   packages with nFPM, and installs them in matching-architecture containers.
+2. The signing job uses the default-branch-only `package-signing` Environment.
+   It signs RPM assets and verifies them against the public certificate. APT
+   authenticates DEB digests through the registry's signed Release metadata.
+3. Review the draft release, assets and v2 `gel-registry.json` manifest before
+   publication. Confirm channel, architectures, package versions, revisions,
+   sizes and SHA-256 values. Testing releases must be GitHub prereleases.
+   Asset names use `<name>-<version>-<revision>-<arch>.deb` or `.rpm`, with `~`
+   replaced by `-` in filenames. Native versions use epoch `1`, and prerelease
+   versions use `~` so distribution version ordering remains correct.
+4. Publish the reviewed release. The registry promotion workflow runs hourly
+   at minute 17, or can be dispatched manually. It collects published,
+   non-draft releases from the allowlist; publication alone does not deploy
+   registry metadata. A maintainer must review and merge the promotion PR.
+
+Treat already-published manifests and package bytes as immutable. Corrections
+require a new release with a higher revision rather than editing a recorded
+release or replacing an asset in place. Product workflows and their acceptance
+must be ready before the first production publication.
+
+### Promote testing to stable
+
+Publish a new product release manifest with channel `stable` through the product
+release process. Do not edit the committed testing release record or move files
+between repository directories. Review the stable manifest's versions, digests
+and RPM signatures just as for a new release. If the publication changes package
+bytes, including re-signing an RPM, give those bytes a new digest and revision.
+The rolling promotion will select and render the stable channel after discovery.
+
+### Review the promotion PR
+
+The single rolling PR is titled `data: promote registry releases`. It is rebuilt
+from current `main` plus eligible unmerged releases, so it may grow while under
+review. Inspect the latest commit and all three sections of its body:
+
+- **Added release records:** confirm the allowlisted publisher, release identity,
+  channel, package family, architecture and asset provenance in each record.
+- **Rejected releases:** investigate deterministic manifest rejections. Package
+  download, digest, identity or RPM signature errors abort rendering and are
+  workflow failures, not accepted rejection entries.
+- **Native package lock changes:** compare additions and removals, full versions,
+  formats, architectures, digests and sizes with the release intent and yanks.
+
+Confirm the corresponding APT indexes and RPM repodata changed for the expected
+channels only, signatures validate against the committed key, and both native
+and portable validation pass. No binary pool should be committed. The `render`
+job produces unsigned metadata with read-only permissions; `publish` applies
+that artifact against the exact render base and signs changed native metadata
+inside `registry-signing` before validation and branch publication. A changed
+base or lease race requires a rerun, never manual edits to `promote/registry`.
+Merge only the reviewed, validated candidate; Vercel then serves that commit.
+
+### Yank a bad native asset
+
+Add every affected DEB/RPM SHA-256 to the JSON array in `native/yanked.json`:
+
+```json
+[
+  { "sha256": "<64 lowercase hex characters>", "reason": "Explain the defect" }
+]
+```
+
+Prepare the yank and replacement repository state as one change:
+
+1. In an environment without signing secrets, update `native/yanked.json` and
+   regenerate the lock and unsigned metadata:
+
+   ```sh
+   uv run gel-registry native render --repo . --cache /tmp/gel-native-cache --out public
+   ```
+2. Transfer the changed yank list, lock and public metadata tree to an authorized
+   signing checkout at the same base commit. Exclude the package cache and any
+   scratch package pool; the signer must not download or parse packages.
+3. With the authorized signing key home and `GELSTABLE_SIGNING_FPR` configured,
+   run `uv run gel-registry native sign --repo .`. Remove the secret key home,
+   then run `uv run gel-registry validate --repo .` using only public files.
+4. Review and merge the yank list, regenerated lock, metadata and signatures
+   together in one PR. A yank-only change fails lock validation.
+
+Until this complete change is deployed, clients can still select the affected
+asset. Cover each affected format and architecture; yanks identify bytes,
+not version strings. Publish a fixed higher revision and advise affected users
+how to upgrade. Clients never downgrade automatically, and yanking does not
+uninstall a package already installed. Retain immutable release records and
+historical portable snapshots. Selecting an older portable snapshot does not
+roll back native repositories.
+
+### Signing keys and Environment secrets
+
+The production certificate uses an RSA 4096 certify-only primary key kept
+offline, with an encrypted backup held by two maintainers, and a signing subkey
+for automation. RSA provides compatibility with supported APT and EL9 RPM
+clients. The certificate and metadata have no expiry; unattended clients do not
+need periodic trust refreshes, but compromise requires explicit rotation and
+an advisory.
+
+| Repository | GitHub Environment | Secrets |
+| --- | --- | --- |
+| `gel-registry` | `registry-signing` | `REGISTRY_SIGNING_KEY`, `REGISTRY_SIGNING_FPR` |
+| `gel`, `gel-cli`, `gel-postgis` | `package-signing` | `PACKAGE_SIGNING_KEY`, `PACKAGE_SIGNING_FPR` |
+
+Restrict signing Environments to each repository's default branch. Key secrets
+contain the exported signing subkey material; fingerprint secrets identify the
+full **signing subkey** fingerprint, distinct from the primary fingerprint
+published to users. Registry signing exposes `REGISTRY_SIGNING_FPR` to the CLI
+as `GELSTABLE_SIGNING_FPR`; local signing uses that same variable and an explicit
+`GNUPGHOME`. Keep the primary private key out of Actions and committed files.
+
+### Key rotation and compromise
+
+Use a reviewed maintenance change for the first production certificate and
+subsequent rotations. The deleted development private key cannot be reused.
+
+1. For the first production certificate, create an RSA 4096 certify-only
+   primary key offline and make an encrypted backup held by two maintainers
+   before creating its signing subkey. For later rotations, use the existing
+   offline primary to create a replacement signing subkey. Revoke a compromised
+   subkey and export the updated public certificate with its revocation and the
+   new subkey. If the primary is compromised, create and back up a new primary
+   certificate, then distribute its new fingerprint through the established
+   maintainer advisory channel.
+2. Replace `public/keys/gelstable.asc` with the armored public certificate.
+   Update all four repositories' Environment key and fingerprint secrets listed
+   above. Coordinate their public-key copies and signing configuration so new
+   RPM assets can be verified by the registry.
+3. Remove the stale generated fingerprint before regenerating support files;
+   support rendering rejects changed predecessor bytes. From the registry root:
+
+   ```sh
+   rm public/keys/gelstable.fingerprint
+   uv run python -c "from pathlib import Path; from gel_registry.render.schemas import render_schemas; render_schemas(Path('.'))"
+   cat public/keys/gelstable.fingerprint
+   ```
+
+   Independently inspect the new primary fingerprint with
+   `gpg --show-keys --with-fingerprint public/keys/gelstable.asc`. Update the
+   fingerprint and key status in `README.md` and `docs/native-packages.md` to
+   match the newly generated file exactly.
+4. Re-sign **all** existing APT and RPM metadata, even if the package lock is
+   unchanged. Ordinary promotion signs only changed native metadata; a render
+   no-op is not a rotation. Import the signing subkey into a temporary protected
+   key home and run:
+
+   ```sh
+   export GNUPGHOME="$(mktemp -d)"
+   chmod 700 "$GNUPGHOME"
+   gpg --batch --import /secure/path/signing-subkey.asc
+   export GELSTABLE_SIGNING_FPR='<full new signing subkey fingerprint>'
+   uv run gel-registry native sign --repo .
+   gpgconf --kill gpg-agent
+   rm -rf "$GNUPGHOME"
+   unset GNUPGHOME GELSTABLE_SIGNING_FPR
+   uv run gel-registry validate --repo .
+   ```
+
+   Signing writes every APT `InRelease` and `Release.gpg`, and every RPM
+   `repomd.xml.asc`, and immediately checks the signatures using the public
+   certificate only. Final validation runs after the secret key home is removed.
+   Also run the configured repository checks before publishing this change.
+5. Review the key, fingerprint, documentation and all signatures as one change.
+   Before removing an old usable key from the public certificate, account for
+   existing RPM assets signed by it. Re-signing RPMs changes their bytes and
+   digests: publish replacement assets with higher revisions and new manifests,
+   yank compromised assets as appropriate, and rebuild native metadata.
+   Metadata re-signing alone does not change RPM package signatures.
+6. Publish the reviewed change and issue an advisory with the affected key,
+   replacement primary fingerprint, affected releases and client remediation.
+   Tell APT users to re-download `/etc/apt/keyrings/gelstable.asc` and verify its
+   fingerprint; tell DNF users to verify and import the updated certificate
+   before refreshing metadata. A revoked key cannot authenticate its own
+   replacement reliably; use the advisory to establish replacement trust.
+   Check production acceptance after publication and track users of installed
+   compromised packages separately.
+
+If a compromise is suspected, stop affected publication and promotion until
+trusted signing is restored. Preserve evidence and do not disable client
+signature checks to recover availability.
+
+### Native production acceptance
+
+`.github/workflows/native-smoke.yml` schedules production smoke checks daily
+at 06:43 UTC, runs after successful production deployments, and accepts manual
+`mode=smoke` or `mode=migration`. Smoke covers both channels on Debian 12/13,
+Ubuntu 22.04/24.04/26.04 and Rocky 9, on x86_64 and aarch64 runners. It checks the
+committed lock for `gel-7` first; launch-empty combinations exit successfully
+without installation. Verify logs actually show installed packages, the server
+query and PostGIS spatial query before recording acceptance.
+
+`tests/clients/smoke.sh` installs from the production registry with normal
+signature enforcement, starts a disposable Gel server, and checks PostGIS.
+Manual migration mode runs `tests/clients/migrate.sh` on Debian 12 and Rocky 9,
+installs legacy Gel 7, writes a sentinel, switches repositories, upgrades and
+queries the retained data. These scripts run as root in disposable containers;
+they are not instructions for upgrading a production database. Fresh VM checks
+are still needed to establish service behavior under a real init system.
+Neither production smoke nor migration has been executed for launch yet.
+
+When acceptance fails, the report job opens an issue titled
+`Native package production acceptance failed` with a link to the workflow run.
+Read the failing distribution, architecture and channel logs, and separate:
+
+- DNS/TLS or static-host errors: compare deployed metadata with the reviewed
+  commit and check `/healthz`, key and source configuration endpoints.
+- Signature or fingerprint errors: stop publication, compare deployed and
+  committed public keys and signatures, and inspect the signing job. Use the
+  rotation procedure if necessary; never bypass authentication.
+- Asset download/digest errors: compare GitHub release assets, recorded digests
+  and lock entries. Cache bytes are verified on every use; rerun transient
+  download failures and publish a higher revision for bad assets.
+- Install, server, PostGIS or migration errors: reproduce the same matrix entry
+  in a disposable system, inspect package versions and server logs, and yank
+  defective assets while preparing the fixed revision.
+
+Track skipped empty channels separately from passing installs. After a reviewed
+fix is deployed, rerun the failed mode and verify the actual queries and retained
+data. Keep the incident open until the affected matrix entries are accepted.

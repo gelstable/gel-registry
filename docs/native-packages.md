@@ -1,65 +1,167 @@
-# Rendering native repositories
+# Install Gel with APT or DNF
 
-Run `gel-registry native render --repo . --cache /tmp/gel-native-cache --out public`.
-The renderer downloads and verifies native assets from release records, validates
-package ownership and RPM signatures, and generates APT and RPM metadata with
-standard distribution tools. The signing public key must be available at
-`public/keys/gelstable.asc`. Only metadata and `native/packages.lock.json` are
-written to the repository; package blobs remain in the cache.
+**Pre-production:** the committed repositories are empty and signed with a
+disposable development certificate whose private key has been deleted. The
+production signing ceremony must replace the certificate and re-sign all
+metadata before launch. Production installation and legacy migration acceptance
+have not been executed. The commands below describe the installation procedure
+after that prerequisite and package publication; they are not evidence of a
+working production service today.
 
-`--base-url` defaults to `https://registry.gelstable.com` and controls the RPM
-package URL base. For example, use `--base-url http://localhost:8000` when testing
-a local server. APT uses paths relative to the configured APT repository root.
+The intended supported systems are Debian 12 and 13, Ubuntu 22.04, 24.04 and
+26.04, and Rocky Linux 9, on x86_64 and aarch64. APT calls these architectures
+`amd64` and `arm64`; DNF calls them `x86_64` and `aarch64`. Each distribution,
+architecture and channel is covered by the configured production smoke matrix,
+but acceptance on fresh systems remains pending.
 
-The lock is a sorted JSON array. Each entry contains `channel`, `format` (`deb`
-or `rpm`), `name`, full `version` (including epoch and revision), native `arch`,
-`sha256`, `size`, and a format-root-relative `path` such as
-`pool/gel-cli/pkg-gel-cli-7.1-1/gel-cli-7.1-1-amd64.deb`.
-A matching committed lock leaves metadata untouched. Remove the lock to request
-a fresh render. Both channels and architectures are generated on the first
-render, including empty repositories.
+## Verify the repository key
 
-To withdraw an asset, add `{ "sha256": "<digest>", "reason": "<reason>" }` to
-`native/yanked.json`, a JSON array. Downloads and package validation failures
-abort rendering; they are never recorded as release rejections.
+The current **development** primary key fingerprint is:
 
-## Signing and offline validation
-
-After rendering, set `GNUPGHOME` to the signing key home and
-`GELSTABLE_SIGNING_FPR` to the full signing subkey fingerprint, then run
-`gel-registry native sign --repo .`. The command signs APT Release files as
-InRelease and Release.gpg, and RPM repomd.xml as repomd.xml.asc, using SHA512.
-It immediately verifies each signature against `public/keys/gelstable.asc`.
-
-`gel-registry validate --repo .` checks these signatures, metadata checksums,
-package sets, the lock against release records after yanks, and unexpected
-repository files. Validation needs only public metadata and the public key;
-it does not download packages or read the signing key home. Package name and
-version identities are checked during rendering; offline checks compare the
-record and metadata fields available without package binaries.
-
-## Local Linux tests
-
-The fixture suite builds real packages with nFPM and generates disposable signing
-keys. Missing tools skip these tests locally. `REQUIRE_NATIVE_TOOLS=1` makes
-missing tools fail, as in CI. Run the suite in a disposable Ubuntu container
-from the repository root:
-
-```sh
-docker run --rm -v "$PWD":/w -w /w ubuntu:24.04 bash -ceu '
-  apt-get update
-  apt-get install -y apt-utils createrepo-c rpm gnupg curl ca-certificates
-  case "$(uname -m)" in
-    aarch64) arch=arm64; digest=1c0f5f2999b9a974bfb04fdb0cc3306096de530ac5dbb25d739cc5f5219c919c ;;
-    x86_64) arch=x86_64; digest=0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783 ;;
-  esac
-  curl -fsSL "https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_${arch}.tar.gz" -o /tmp/nfpm.tar.gz
-  echo "$digest  /tmp/nfpm.tar.gz" | sha256sum --check
-  tar -xzf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
-  curl -LsSf https://astral.sh/uv/0.11.6/install.sh | sh
-  UV_PROJECT_ENVIRONMENT=/tmp/venv REQUIRE_NATIVE_TOOLS=1 /root/.local/bin/uv run pytest -q -m native_tools
-'
+```text
+F8572499192C6FA4FCF9F41D60925A049A5C41FF
 ```
 
-The root-container suite includes an `apt-get update` and installation of a tiny
-fixture package, then purges that fixture. Run it only in a disposable container.
+The armored certificate is published at
+`https://registry.gelstable.com/keys/gelstable.asc`, with its full primary
+fingerprint at `/keys/gelstable.fingerprint`. At launch, compare the downloaded
+key with the production fingerprint published here and in the registry README.
+Stop if they disagree. The development fingerprint above must be replaced in
+both documents during the production ceremony.
+
+## APT: Debian and Ubuntu
+
+Install prerequisites, download the key, and inspect its primary fingerprint:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates gnupg
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSLo /etc/apt/keyrings/gelstable.asc https://registry.gelstable.com/keys/gelstable.asc
+sudo chmod 0644 /etc/apt/keyrings/gelstable.asc
+gpg --show-keys --with-fingerprint /etc/apt/keyrings/gelstable.asc
+```
+
+After verifying the fingerprint, configure stable and install Gel 7:
+
+```sh
+sudo curl -fsSLo /etc/apt/sources.list.d/gelstable.sources https://registry.gelstable.com/gelstable.sources
+sudo apt-get update
+sudo apt-get install gel-7
+```
+
+The source file contains:
+
+```text
+Types: deb
+URIs: https://registry.gelstable.com/apt
+Suites: stable
+Components: main
+Signed-By: /etc/apt/keyrings/gelstable.asc
+```
+
+These APT versions read armored `.asc` keys directly. Trust is scoped with
+`Signed-By`; do not use `apt-key` or disable signature checking.
+
+## DNF: Rocky Linux
+
+Download and inspect the same key, then import it after checking the fingerprint:
+
+```sh
+sudo dnf install curl ca-certificates gnupg2
+curl -fsSLo /tmp/gelstable.asc https://registry.gelstable.com/keys/gelstable.asc
+gpg --show-keys --with-fingerprint /tmp/gelstable.asc
+sudo rpm --import /tmp/gelstable.asc
+sudo curl -fsSLo /etc/yum.repos.d/gelstable.repo https://registry.gelstable.com/gelstable.repo
+sudo dnf install gel-7
+```
+
+Run the import and installation only after fingerprint verification. The repo
+file contains:
+
+```ini
+[gelstable]
+name=Gelstable
+baseurl=https://registry.gelstable.com/rpm/stable/$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://registry.gelstable.com/keys/gelstable.asc
+```
+
+Both RPM packages and repository metadata must pass signature checks. Confirm
+any additional DNF key-import prompt matches the verified certificate.
+
+## Packages and testing channel
+
+`gel-7` installs the Gel 7 server and CLI. The corresponding packages are
+`gel-server-7` and `gel-cli`. Install `gel-server-7-ext-postgis` to use the
+PostGIS extension. Native server packages use **bundled libraries** instead of
+relying on distribution versions of their private runtime libraries. Server
+and extension updates come through these packages; keep them updated together.
+
+APT testing uses a second source file:
+
+```sh
+sudo curl -fsSLo /etc/apt/sources.list.d/gelstable-testing.sources https://registry.gelstable.com/gelstable-testing.sources
+sudo apt-get update
+sudo apt-get install -t testing gel-7 gel-server-7-ext-postgis
+```
+
+With both suites enabled, APT may choose a newer testing version during ordinary
+upgrades. Use testing on a disposable system or configure APT pinning if you
+need package-specific selection. To stop receiving testing updates, remove
+`/etc/apt/sources.list.d/gelstable-testing.sources` and run `apt-get update`.
+
+DNF testing is disabled by default and enabled explicitly for a transaction:
+
+```sh
+sudo curl -fsSLo /etc/yum.repos.d/gelstable-testing.repo https://registry.gelstable.com/gelstable-testing.repo
+sudo dnf --enablerepo=gelstable-testing install gel-7 gel-server-7-ext-postgis
+```
+
+The testing repository has `enabled=0`, `gpgcheck=1` and `repo_gpgcheck=1`.
+Removing testing configuration does not downgrade installed packages. Wait for
+a higher stable version or plan an explicit downgrade after checking data
+compatibility.
+
+## Migrate from packages.geldata.com
+
+Back up the database and record the installed package versions before upgrading.
+Locate the legacy repository configuration:
+
+```sh
+# Debian / Ubuntu
+sudo grep -R -n 'packages.geldata.com' /etc/apt/sources.list /etc/apt/sources.list.d
+# Rocky Linux
+sudo grep -R -n 'packages.geldata.com' /etc/yum.repos.d
+```
+
+Remove the legacy source file or only its entries if the file contains other
+repositories. Do not remove Gel packages or their data. Follow the stable setup
+above, including fingerprint verification, then review and apply the upgrade:
+
+```sh
+# Debian / Ubuntu
+sudo apt-get update
+sudo apt-get --simulate full-upgrade
+sudo apt-get full-upgrade
+# Rocky Linux
+sudo dnf upgrade --assumeno
+sudo dnf upgrade
+```
+
+Review removals and replacements before accepting. APT needs `full-upgrade`
+because replacing the legacy `edgedb-cli` transitional package involves a
+removal that ordinary `upgrade` can hold back. New package versions carry epoch
+`1` (`1:<version>-<revision>`), which makes them upgrade candidates over legacy
+packages. Data under `/var/lib/gel`, the `gel` system user, and existing service
+unit names are preserved. Check the service and query existing data after the
+upgrade. The production migration acceptance that verifies retained data is
+still pending; see the [operator runbook](operations.md#native-production-acceptance).
+
+For signing failures, stop and check the fingerprint and the operator advisory.
+Never bypass APT authentication, `gpgcheck`, or `repo_gpgcheck` to finish an install.
+
+Repository maintainers can use the [operations runbook](operations.md#native-package-operations)
+and [local development guide](native-development.md).
