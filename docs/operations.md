@@ -439,6 +439,113 @@ containing secret subkeys and no primary private key; never remove protection
 from the custody primary or its backup.
 The primary private-key backup remains protected by its own strong passphrase.
 
+### Local signing-key helper
+
+`scripts/signing-key.py` wraps standard GnuPG locally using Python's standard
+library. Install Python 3.13 and GnuPG 2.4 with a working pinentry; on macOS,
+`brew install python@3.13 gnupg pinentry-mac` supplies them. Run from a private
+operator terminal. For terminal pinentry, set `GPG_TTY="$(tty)"`; a graphical
+pinentry can be selected with `--pinentry-program /absolute/path/to/pinentry-mac`.
+Trusted executable paths resolve to their canonical executable, including
+Homebrew symlinks; secret/input/output paths still refuse symlinks.
+The helper creates isolated temporary homes and stops their agents, preserving
+your existing `GNUPGHOME` and keyrings. It never installs secrets, publishes
+keys, changes your public trust, or revokes custody/caller keys.
+
+Choose a **new** output directory outside every Git checkout. Existing paths
+and symlink destinations are refused. The directory is private (`0700`) and
+all artifacts are private (`0600`), including the public certificate:
+
+```sh
+python3 scripts/signing-key.py create \
+  --uid 'Gelstable Package Signing <maintainer-controlled-address>' \
+  --out "$HOME/SigningCustody/gelstable-initial"
+```
+
+GPG first asks for a strong passphrase protecting the RSA4096 certify-only
+primary and its RSA4096 signing subkey; neither expires under current policy.
+Save this passphrase separately in custody. Generation, backup export and
+subkey export may ask you to unlock that key again. In a **separate subkey-only
+home**, GPG then asks for the existing passphrase followed by a new passphrase:
+leave the new passphrase empty and confirm removal. The helper uses GPG agent's
+[interactive PASSWD command](https://www.gnupg.org/documentation/manuals/gnupg/Agent-PASSWD.html)
+for this selected subkey. The protected custody primary never undergoes that
+change. The script never reads a passphrase and accepts no passphrase argument
+or environment variable. Do not record the ceremony terminal or pinentry.
+
+| Artifact | Custody purpose |
+| --- | --- |
+| `primary-backup.asc` | Passphrase-protected primary plus existing subkeys; offline recovery and future rotation |
+| `automation-subkey.asc` | Selected **unprotected** signing secret only; source for Environment key secrets |
+| `public.asc` | Full public certificate, retaining historical public subkeys |
+| `fingerprints.json` | Primary, selected signing and historical subkey fingerprints; artifact integrity hashes |
+| `primary-revocation.rev` | Primary emergency revocation artifact, with GPG's import-protection colon intact |
+| `README.txt` | Bundle custody and manual recovery reminders |
+
+Upload these files as separate 1Password Documents or attachments and store the
+primary passphrase in the separate custody item described below. Protect the
+unprotected automation export with vault and Environment access controls. Never
+upload the primary backup or its passphrase as a CI signing secret. Compare the
+printed fingerprints with the independently recorded ceremony inventory before
+using any exported key.
+
+For routine signing-subkey replacement, download the protected primary backup
+**and its original primary revocation artifact** to private files. Supply the
+recorded full primary fingerprint, rather than a UID or short key ID:
+
+```sh
+python3 scripts/signing-key.py rotate-subkey \
+  --backup /secure/downloads/primary-backup.asc \
+  --revocation-certificate /secure/downloads/primary-revocation.rev \
+  --primary-fingerprint '<40-character recorded primary fingerprint>' \
+  --out "$HOME/SigningCustody/gelstable-rotation-2026-10"
+```
+
+The prompt sequence is the same: unlock the protected primary to certify the
+replacement, then remove protection only from the new isolated automation copy.
+The refreshed primary backup and public certificate retain historical subkeys.
+The supplied revocation artifact is authenticated against the exact primary
+before replacement key generation, then carried forward unchanged. No custody
+or caller key is revoked or deleted.
+If the primary is compromised, use `create` and the new-trust procedure below.
+
+The helper verifies every completed bundle. Also verify downloaded vault copies
+in a new private directory, using fingerprints from your independent inventory:
+
+```sh
+python3 scripts/signing-key.py verify \
+  --bundle /secure/downloads/gelstable-bundle \
+  --primary-fingerprint '<40-character recorded primary fingerprint>' \
+  --signing-fingerprint '<40-character recorded signing-subkey fingerprint>'
+```
+
+`verify` checks artifact integrity, matching certificate fingerprints and key
+policy, protected primary backup, absence of primary or unrelated CI secrets,
+and a test signature from the exact signing subkey. Fresh isolated agents with
+`--pinentry-mode error` ensure an encrypted/nonfunctional CI export fails rather
+than succeeding through a cached passphrase. Public-only verification checks the
+actual signing fingerprint. All four artifact hashes must be present and valid;
+they provide consistency, not a replacement for independently recorded
+fingerprints. Revocation authentication uses a separate disposable public-only
+copy: that copy must begin unrevoked and become revoked by the supplied
+certificate for exactly the recorded primary. The import-protection colon is
+removed only from the temporary validation copy; the original artifact, custody
+primary and caller keyrings stay unchanged. Separately perform
+the manual primary-unlock restore test below with the saved passphrase.
+
+On cancellation or failure, temporary homes are cleaned up and output retains
+an `INCOMPLETE` marker and any backups already exported. Keep those backups,
+investigate the failure and choose a new output directory for another ceremony.
+Do not install an incomplete bundle. After verified vault restore and manual
+primary unlock, remove local exports according to custody policy.
+
+Continue the reviewed key-rotation procedure below: update GitHub Environment
+secrets, public certificates and fingerprints, the native-tools Docker image
+pin if its embedded certificate changes, and re-sign all bootstrap metadata.
+These remain operator actions. Emergency revocation activation and distribution
+also remain manual; never remove the `.rev` colon or import it during routine
+restore or rotation.
+
 ### Signing-key custody and recovery
 
 While the project has one maintainer, a personal 1Password account with a
