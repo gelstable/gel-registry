@@ -411,12 +411,11 @@ roll back native repositories.
 
 ### Signing keys and Environment secrets
 
-The production certificate uses an RSA 4096 certify-only primary key kept
-offline, with an encrypted backup held by two maintainers, and a signing subkey
-for automation. RSA provides compatibility with supported APT and EL9 RPM
-clients. The certificate and metadata have no expiry; unattended clients do not
-need periodic trust refreshes, but compromise requires explicit rotation and
-an advisory.
+The production certificate uses an RSA 4096 certify-only primary key and a
+signing subkey for automation. RSA provides compatibility with supported APT
+and EL9 RPM clients. The certificate and metadata have no expiry; unattended
+clients do not need periodic trust refreshes, but compromise requires explicit
+rotation and an advisory.
 
 | Repository | GitHub Environment | Secrets |
 | --- | --- | --- |
@@ -428,7 +427,80 @@ contain the exported signing subkey material; fingerprint secrets identify the
 full **signing subkey** fingerprint, distinct from the primary fingerprint
 published to users. Registry signing exposes `REGISTRY_SIGNING_FPR` to the CLI
 as `GELSTABLE_SIGNING_FPR`; local signing uses that same variable and an explicit
-`GNUPGHOME`. Keep the primary private key out of Actions and committed files.
+`GNUPGHOME`. Keep the primary private key out of CI, Git and committed files.
+Export only secret subkeys for the protected GitHub Environments, never the
+primary private key. The current batch import and signing workflows have no
+passphrase input: the automation subkey export must have no passphrase. Keep
+that export protected by 1Password and GitHub Environment secret storage;
+an encrypted export that needs an interactive unlock will not work in CI.
+An ordinary export of a passphrase-protected subkey retains that protection.
+If removing a subkey passphrase for automation, work only on an isolated copy
+containing secret subkeys and no primary private key; never remove protection
+from the custody primary or its backup.
+The primary private-key backup remains protected by its own strong passphrase.
+
+### Signing-key custody and recovery
+
+While the project has one maintainer, a personal 1Password account with a
+dedicated **Gelstable Signing** vault is an acceptable custody model. Generate
+the keys locally on a maintained Mac with disk encryption, in a protected
+`GNUPGHOME` outside the checkout. A separate offline key-generation ceremony
+and independent encrypted backups are optional stronger arrangements; a second
+maintainer is not a prerequisite for the solo setup.
+
+Keep these project items in the dedicated vault:
+
+| Item | Contents |
+| --- | --- |
+| Primary private-key backup | Passphrase-protected private-key export for certification and recovery; never upload it to CI. |
+| Primary-key passphrase | The strong passphrase for the primary backup, recorded separately from the backup item. |
+| Signing-subkey backup | Secret-subkey-only export matching the automation passphrase policy above. |
+| Revocation certificate | The certificate needed to revoke the primary if it is compromised; treat it as sensitive. |
+| Public certificate and fingerprints | Public certificate plus full primary and signing-subkey fingerprints, clearly labeled. |
+| Recovery and rotation guide | This procedure, item/file inventory, restore-test record and custodian details; no secrets in the repository copy. |
+
+Store key exports and the revocation certificate as Document items or attached
+files, following [1Password's file instructions](https://support.1password.com/files/).
+Before deleting temporary exports, download the saved backups and restore them
+into isolated temporary `GNUPGHOME` directories with mode `700` outside the
+checkout. Compare the primary and subkey fingerprints with the recorded public
+certificate using `gpg --with-fingerprint --with-subkey-fingerprint` when
+listing restored keys. Confirm the primary backup unlocks with its saved
+passphrase. In a separate home containing only the automation export, confirm
+the primary secret is absent and make a batch test signature selecting the
+full signing-subkey fingerprint with `!`. Use a fresh agent with no cached
+passphrase and `--pinentry-mode error` to prove no interactive unlock is needed;
+verify that signature using only the public certificate and check the
+signing-subkey fingerprint. Record the result,
+stop the temporary GPG agents, and remove the temporary homes and exports.
+
+Prepare the account [Emergency Kit](https://support.1password.com/emergency-kit/)
+and an [individual-account recovery code](https://support.1password.com/recovery-codes/).
+Keep accessible protected copies outside this same vault, such as in a physical
+safe, so losing vault access does not also lose recovery access. Plan recovery
+of the account's email and authenticator/2FA separately: recovery-code use needs
+email access and leaves enabled 2FA in place. Update the Emergency Kit after
+account credentials change. These account-recovery materials are personal
+account credentials, separate from the project's key-custody items.
+
+When other maintainers join, move only project items into a restricted
+**Gelstable Signing** custody vault in an organization/team 1Password account.
+Use the [account migration instructions](https://support.1password.com/migrate-business-account/)
+for moving items, choosing the shared custody vault rather than an Employee or
+private vault. Verify every item and all Document/attachment files are present
+and downloadable in the destination, then repeat the restore test before
+removing old copies. Assign appropriate organization owners and designated
+key custodians, with actual item access and a working account-recovery path;
+review [vault permissions](https://support.1password.com/create-share-vaults-teams/),
+including inherited group and owner access. Contributors who only review or
+approve releases do not need key custody. Team account recovery uses
+administrators rather than individual recovery codes.
+
+Moving custody preserves the key fingerprints and does not require rotation
+unless compromise is suspected. Remove obsolete copies and access after the
+verified handoff, but neither deletion nor removing vault access cryptographically
+revokes a key already copied by someone. Use the compromise procedure below
+when previously exposed key material can no longer be trusted.
 
 ### Key rotation and compromise
 
@@ -436,11 +508,15 @@ Use a reviewed maintenance change for the first production certificate and
 subsequent rotations. The deleted development private key cannot be reused.
 
 1. For the first production certificate, create an RSA 4096 certify-only
-   primary key offline and make an encrypted backup held by two maintainers
-   before creating its signing subkey. For later rotations, use the existing
-   offline primary to create a replacement signing subkey. Revoke a compromised
-   subkey and export the updated public certificate with its revocation and the
-   new subkey. If the primary is compromised, create and back up a new primary
+   primary key locally under the custody model above, then create its signing
+   subkey. Save the primary backup and passphrase, signing-subkey backup,
+   revocation certificate and public fingerprints in the custody vault and
+   complete the restore test before deleting temporary exports or publishing.
+   For later rotations, restore the existing primary into a protected local
+   key home to create a replacement signing subkey, then update and restore-test
+   the custody backups. Revoke a compromised subkey and export the updated
+   public certificate with its revocation and the new subkey. If the primary
+   is compromised, create and back up a new primary
    certificate, then distribute its new fingerprint through the established
    maintainer advisory channel.
 2. Replace `public/keys/gelstable.asc` with the armored public certificate.

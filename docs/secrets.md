@@ -106,7 +106,7 @@ is review and merge of the resulting promotion PR, after metadata signing.
 The workflow also restricts its publish job to the default branch.
 
 Store `REGISTRY_SIGNING_KEY` as the armored secret signing subkey export,
-without the offline primary secret key. Store `REGISTRY_SIGNING_FPR` as its
+without the primary private key. Store `REGISTRY_SIGNING_FPR` as its
 full signing-subkey fingerprint. The workflow maps this selector to
 `GELSTABLE_SIGNING_FPR` for `gel-registry native sign`, which selects that
 exact subkey and verifies signatures with `public/keys/gelstable.asc`.
