@@ -47,10 +47,10 @@ Maintainers must enforce two critical repository invariants:
 ## Native repository keys and clients
 
 `public/keys/gelstable.asc` is the public certificate; its primary fingerprint
-is generated in `public/keys/gelstable.fingerprint`. The current certificate is
-**disposable development material**, and its private material has been deleted.
-Replace it with the production certificate and re-sign all APT and RPM metadata
-before merging for production. Never commit private keys.
+is generated in `public/keys/gelstable.fingerprint`. The production certificate
+and all APT/RPM signatures use the key backed up in signing custody. Complete
+package publication and client acceptance before launch. Never commit private
+keys; use only the automation signing subkey in protected signing Environments.
 
 Render metadata with `gel-registry native render --repo . --cache DIR --out public`.
 Sign with an isolated `GNUPGHOME` and the full signing subkey fingerprint in

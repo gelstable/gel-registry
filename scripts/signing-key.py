@@ -50,7 +50,9 @@ def destination(path: Path) -> Path:
 def key_home(pinentry: str | None = None) -> Iterator[Path]:
     # /tmp keeps private homes outside the checkout even when TMPDIR is overridden.
     with tempfile.TemporaryDirectory(prefix="gel-key-", dir="/tmp") as name:
-        home = Path(name)
+        # macOS aliases /tmp to /private/tmp. Canonicalize only our internally
+        # created home; operator-supplied paths retain strict symlink rejection.
+        home = Path(name).resolve(strict=True)
         if pinentry:
             if any(c in pinentry for c in "\n\r"):
                 raise CeremonyError("invalid pinentry program")

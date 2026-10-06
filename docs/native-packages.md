@@ -1,11 +1,9 @@
 # Install Gel with APT or DNF
 
-**Pre-production:** the committed repositories are empty and signed with a
-disposable development certificate whose private key has been deleted. The
-production signing ceremony must replace the certificate and re-sign all
-metadata before launch. Production installation and legacy migration acceptance
-have not been executed. The commands below describe the installation procedure
-after that prerequisite and package publication; they are not evidence of a
+**Pre-production:** the committed repositories are empty and signed with the
+production certificate backed up in signing custody. Production installation
+and legacy migration acceptance have not been executed. The commands below
+describe installation after package publication; they are not evidence of a
 working production service today.
 
 The intended supported systems are Debian 12 and 13, Ubuntu 22.04, 24.04 and
@@ -16,18 +14,17 @@ but acceptance on fresh systems remains pending.
 
 ## Verify the repository key
 
-The current **development** primary key fingerprint is:
+The production primary key fingerprint is:
 
 ```text
-F8572499192C6FA4FCF9F41D60925A049A5C41FF
+EBFC46CC958983DD73D6E7D7F7C050A836EDB7EC
 ```
 
 The armored certificate is published at
 `https://registry.gelstable.com/keys/gelstable.asc`, with its full primary
 fingerprint at `/keys/gelstable.fingerprint`. At launch, compare the downloaded
 key with the production fingerprint published here and in the registry README.
-Stop if they disagree. The development fingerprint above must be replaced in
-both documents during the production ceremony.
+Stop if they disagree.
 
 ## APT: Debian and Ubuntu
 

@@ -67,6 +67,16 @@ def verify_signature(
         return output.read_bytes() if data is None else b""
 
 
+def cleartext_matches_release(cleartext: bytes, release: bytes) -> bool:
+    # GnuPG versions differ in whether they return the final cleartext framing
+    # LF. Permit only that one byte; Release.gpg still authenticates exact bytes.
+    return (
+        cleartext == release
+        or cleartext == release + b"\n"
+        or cleartext + b"\n" == release
+    )
+
+
 def sign_native(repo: Path) -> None:
     """Sign only APT Release and RPM repomd.xml using the operator environment."""
     fingerprint = os.environ.get("GELSTABLE_SIGNING_FPR", "").upper()
@@ -111,5 +121,7 @@ def sign_native(repo: Path) -> None:
             cleartext = verify_signature(
                 key, signature, None if "--clearsign" in flags else target, fingerprint
             )
-            if "--clearsign" in flags and cleartext != target.read_bytes():
+            if "--clearsign" in flags and not cleartext_matches_release(
+                cleartext, target.read_bytes()
+            ):
                 raise ValueError(f"signed Release differs: {signature}")

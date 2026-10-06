@@ -4,15 +4,42 @@ import base64
 import hashlib
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/signing-key.py"
 pytestmark = pytest.mark.skipif(shutil.which("gpg") is None, reason="requires GnuPG")
+
+
+def test_private_key_files_work_under_symlinked_temp_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # macOS aliases /tmp to /private/tmp. Internal key files must still pass
+    # validation without allowing symlinks in operator-supplied paths.
+    root = tmp_path / "real-temp"
+    root.mkdir()
+    alias = tmp_path / "temp-alias"
+    alias.symlink_to(root, target_is_directory=True)
+    temporary_directory = tempfile.TemporaryDirectory
+
+    def aliased_directory(*, prefix: str, dir: str) -> tempfile.TemporaryDirectory[str]:
+        return temporary_directory(prefix=prefix, dir=alias)
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", aliased_directory)
+    script = runpy.run_path(str(SCRIPT))
+    with script["key_home"]() as home:
+        artifact = home / "protected-subkey.asc"
+        artifact.write_bytes(b"disposable test artifact")
+        artifact.chmod(0o600)
+        script["private_file"](artifact)
+        assert home.stat().st_mode & 0o777 == 0o700
+    assert not home.exists()
 
 
 @pytest.fixture

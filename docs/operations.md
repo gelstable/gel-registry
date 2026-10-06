@@ -311,9 +311,8 @@ tree. The lock `native/packages.lock.json` records every selected package,
 channel, format, native architecture, full epoch/version/revision, digest, size
 and repository path.
 
-**Launch prerequisite:** the current empty repositories use a disposable
-development certificate, and its private key has been deleted. Complete the
-production key ceremony below and re-sign all metadata before deployment.
+**Launch prerequisite:** the current empty repositories use the production
+certificate backed up in signing custody, and all metadata has been re-signed.
 Production smoke and migration acceptance remain pending. Empty-channel skips
 in the acceptance workflow do not demonstrate a successful installation.
 
@@ -540,8 +539,8 @@ Do not install an incomplete bundle. After verified vault restore and manual
 primary unlock, remove local exports according to custody policy.
 
 Continue the reviewed key-rotation procedure below: update GitHub Environment
-secrets, public certificates and fingerprints, the native-tools Docker image
-pin if its embedded certificate changes, and re-sign all bootstrap metadata.
+secrets, public certificates and fingerprints, the Docker image's primary-key
+fingerprint pin, and re-sign all bootstrap metadata.
 These remain operator actions. Emergency revocation activation and distribution
 also remain manual; never remove the `.rev` colon or import it during routine
 restore or rotation.

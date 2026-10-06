@@ -9,11 +9,9 @@ See [native package installation](docs/native-packages.md), the
 [local native repository development](docs/native-development.md).
 
 **Native packages are pre-production.** The committed repositories are empty.
-Their disposable development certificate has primary fingerprint
-`F8572499192C6FA4FCF9F41D60925A049A5C41FF`; its private key has been deleted.
-This is not the production trust anchor. Before launch, replace the public key,
-regenerate its fingerprint, update this README and the installation guide, and
-re-sign all APT/RPM metadata with the production signing key. Fresh-system
+Their production signing certificate has primary fingerprint
+`EBFC46CC958983DD73D6E7D7F7C050A836EDB7EC`; its private key is held in custody.
+All APT/RPM metadata is signed with its automation signing subkey. Fresh-system
 production smoke and legacy migration acceptance remain unexecuted.
 
 The current certificate and fingerprint are committed under

@@ -12,7 +12,7 @@ from xml.etree import ElementTree as ET
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..native.sign import verify_signature
+from ..native.sign import cleartext_matches_release, verify_signature
 from ..render.snapshots import load_releases
 from .report import Collector
 
@@ -123,7 +123,9 @@ def validate_native(repo: Path) -> None:
         inrelease = _safe(apt, "InRelease")
         detached = _safe(apt, "Release.gpg")
         expected.update((release, inrelease, detached))
-        if verify_signature(key, inrelease) != release.read_bytes():
+        if not cleartext_matches_release(
+            verify_signature(key, inrelease), release.read_bytes()
+        ):
             raise ValueError("InRelease cleartext does not match Release")
         verify_signature(key, detached, release)
         hashes = {}

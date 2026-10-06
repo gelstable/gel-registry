@@ -3,8 +3,9 @@
 For client installation, see [native packages](native-packages.md). Production
 release, signing-key rotation and acceptance procedures are in the
 [operations runbook](operations.md#native-package-operations). Local fixtures use
-disposable keys; the committed development certificate has no available private
-key and cannot sign newly rendered metadata.
+disposable keys; the committed production certificate's private key is held in
+signing custody and is not available from the checkout. Signing newly rendered
+metadata requires the authorized automation subkey.
 
 Run `gel-registry native render --repo . --cache /tmp/gel-native-cache --out public`.
 The renderer downloads and verifies native assets from release records, validates

@@ -187,6 +187,55 @@ def test_signed_cleartext_must_match_release(
         validate_native(repo)
 
 
+@pytest.mark.parametrize(
+    ("framing", "accepted"),
+    [
+        ("extra-newline", True),
+        ("missing-newline", True),
+        ("two-newlines", False),
+        ("crlf", False),
+        ("changed-content", False),
+    ],
+)
+def test_gpgv_cleartext_final_newline_is_compatible(
+    native_repo: Any, monkeypatch: Any, framing: str, accepted: bool
+) -> None:
+    from gel_registry.native import sign as signing
+
+    repo = signed(native_repo, monkeypatch)
+    command = signing.command
+
+    def framed_output(args: list[str]) -> bytes:
+        status = command(args)
+        if args[0] == "gpgv" and "--output" in args:
+            output = Path(args[args.index("--output") + 1])
+            data = output.read_bytes()
+            variants = {
+                "extra-newline": data + b"\n",
+                "missing-newline": data.removesuffix(b"\n"),
+                "two-newlines": data + b"\n\n",
+                "crlf": data.replace(b"\n", b"\r\n"),
+                "changed-content": b"Origin: Other\n" + data,
+            }
+            output.write_bytes(variants[framing])
+        return status
+
+    # Real signatures are verified first. Simulate only the framing newline
+    # difference between GnuPG versions, leaving detached verification intact.
+    monkeypatch.setattr(signing, "command", framed_output)
+    if not accepted:
+        with pytest.raises(ValueError, match="cleartext"):
+            validate_native(repo)
+        assert sign(repo, repo.parent / "gnupg", monkeypatch) == 1
+        return
+    validate_native(repo)
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
+    release = repo / "public/apt/dists/stable/Release"
+    release.write_bytes(release.read_bytes() + b"\n")
+    with pytest.raises(ValueError):
+        validate_native(repo)
+
+
 def test_native_records_require_bootstrap(native_repo: Any) -> None:
     from gel_registry.validation.local import validate_local
 
