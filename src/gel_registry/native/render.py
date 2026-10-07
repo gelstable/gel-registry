@@ -11,9 +11,11 @@ from pathlib import Path
 from typing import TypedDict
 from urllib.parse import urlsplit
 
+from .. import storage
 from ..gather import load_repositories
 from ..render.snapshots import load_releases
 from .fetch import fetch_package
+from .inputs import input_path, load_yanked
 from .inspect import inspect_package
 
 
@@ -46,17 +48,8 @@ def render_native(
     repositories = load_repositories(repo)
     config = json.loads((repo / "sources/github.json").read_bytes())
     names = config.get("native_package_names", {})
-    yank_path = repo / "native/yanked.json"
-    yanks = json.loads(yank_path.read_bytes()) if yank_path.exists() else []
-    if not isinstance(yanks, list) or any(
-        not isinstance(entry, dict)
-        or set(entry) != {"sha256", "reason"}
-        or not isinstance(entry["sha256"], str)
-        or not isinstance(entry["reason"], str)
-        for entry in yanks
-    ):
-        raise ValueError("invalid native yank list")
-    yanked = {entry["sha256"] for entry in yanks}
+    lock_path = input_path(repo, "packages.lock.json")
+    yanked = load_yanked(repo)
     entries: list[LockEntry] = []
     identities: dict[tuple[str, str, str, str], str] = {}
     blobs: dict[str, Path] = {}
@@ -115,7 +108,6 @@ def render_native(
         )
     )
     lock = (json.dumps(entries, sort_keys=True, indent=2) + "\n").encode()
-    lock_path = repo / "native/packages.lock.json"
     if lock_path.exists() and lock_path.read_bytes() == lock:
         return False
     cache.mkdir(parents=True, exist_ok=True)
@@ -180,11 +172,73 @@ def render_native(
             for option, value in options.items():
                 args.extend(["-o", f"APT::FTPArchive::Release::{option}={value}"])
             (apt / "Release").write_bytes(_command([*args, "release", "."], apt))
-        for fmt in ("apt", "rpm"):
-            destination = out / fmt
-            if destination.exists():
-                shutil.rmtree(destination)
-            shutil.copytree(metadata / fmt, destination)
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_bytes(lock)
+        _install_metadata(metadata, out, lock_path, lock)
     return True
+
+
+def _install_metadata(metadata: Path, out: Path, lock_path: Path, lock: bytes) -> None:
+    """Stage on each destination filesystem, then install with rollback.
+
+    Renames are atomic per path. This restores the old generation on ordinary
+    filesystem errors; it is not a crash-atomic swap of all three paths.
+    """
+    for path in (out, out / "apt", out / "rpm", lock_path):
+        if any(parent.is_symlink() for parent in (path, *path.parents)):
+            raise ValueError(f"symlink in native output: {path}")
+    for path in (out / "apt", out / "rpm"):
+        if path.exists() and not path.is_dir():
+            raise ValueError(f"native output is not a directory: {path}")
+    created_dirs: list[Path] = []
+    stages: list[Path] = []
+    moved: list[tuple[Path, Path]] = []
+    installed: list[Path] = []
+    cleanup = True
+    try:
+        created_dirs.extend(storage.ensure_directory_chain(out))
+        created_dirs.extend(storage.ensure_directory_chain(lock_path.parent))
+        trees = Path(tempfile.mkdtemp(prefix=".native-install-", dir=out))
+        stages.append(trees)
+        lock_stage = Path(
+            tempfile.mkdtemp(prefix=".native-install-", dir=lock_path.parent)
+        )
+        stages.append(lock_stage)
+        for fmt in ("apt", "rpm"):
+            shutil.copytree(metadata / fmt, trees / fmt)
+        (lock_stage / lock_path.name).write_bytes(lock)
+        replacements = [
+            (trees / "apt", out / "apt"),
+            (trees / "rpm", out / "rpm"),
+            (lock_stage / lock_path.name, lock_path),
+        ]
+        try:
+            for staged, destination in replacements:
+                backup = staged.with_name(staged.name + ".backup")
+                if destination.exists():
+                    os.replace(destination, backup)
+                    moved.append((destination, backup))
+                os.replace(staged, destination)
+                installed.append(destination)
+        except OSError:
+            try:
+                for destination in reversed(installed):
+                    if destination.is_dir():
+                        shutil.rmtree(destination)
+                    else:
+                        destination.unlink()
+                for destination, backup in reversed(moved):
+                    os.replace(backup, destination)
+            except OSError as exc:
+                # Keep backups for operator recovery if the filesystem also
+                # refuses rollback. Never delete the only remaining old bytes.
+                cleanup = False
+                raise OSError(
+                    f"native installation rollback failed; backups retained in {stages}"
+                ) from exc
+            raise
+    finally:
+        if cleanup:
+            for stage in stages:
+                shutil.rmtree(stage)
+            for directory in reversed(created_dirs):
+                if directory.exists() and not any(directory.iterdir()):
+                    directory.rmdir()

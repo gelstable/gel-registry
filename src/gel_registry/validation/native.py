@@ -12,6 +12,7 @@ from xml.etree import ElementTree as ET
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..native.inputs import input_path, load_yanked
 from ..native.sign import cleartext_matches_release, verify_signature
 from ..render.snapshots import load_releases
 from .report import Collector
@@ -47,26 +48,44 @@ def _check_hash(path: Path, digest: str, size: int | None = None) -> None:
         raise ValueError(f"checksum or size mismatch: {path}")
 
 
-def _packages(raw: bytes) -> set[tuple[str, str, int]]:
+def _packages(raw: bytes) -> set[tuple[str, str, int, str, str, str]]:
     entries = set()
     for stanza in raw.decode().strip().split("\n\n"):
         if not stanza.strip():
             continue
         fields = {}
         for line in stanza.splitlines():
-            if line.startswith(("Filename:", "SHA256:", "Size:")):
+            if line.startswith(
+                (
+                    "Filename:",
+                    "SHA256:",
+                    "Size:",
+                    "Package:",
+                    "Version:",
+                    "Architecture:",
+                )
+            ):
                 name, value = line.split(":", 1)
                 if name in fields:
                     raise ValueError(f"duplicate package field: {name}")
                 fields[name] = value.strip()
-        entries.add((fields["SHA256"], fields["Filename"], int(fields["Size"])))
+        entries.add(
+            (
+                fields["SHA256"],
+                fields["Filename"],
+                int(fields["Size"]),
+                fields["Package"],
+                fields["Version"],
+                fields["Architecture"],
+            )
+        )
     return entries
 
 
 def validate_native(repo: Path) -> None:
     """Validate initialized native trees without network, package files or secrets."""
     public = repo / "public"
-    lock_path = repo / "native/packages.lock.json"
+    lock_path = input_path(repo, "packages.lock.json")
     raw_lock = json.loads(lock_path.read_bytes())
     if not isinstance(raw_lock, list):
         raise ValueError("native lock must be an array")
@@ -82,17 +101,7 @@ def validate_native(repo: Path) -> None:
                 "invalid native lock channel, format, architecture or path"
             )
         _safe(public / ("apt" if entry.format == "deb" else "rpm"), entry.path)
-    yanks_path = repo / "native/yanked.json"
-    yanks = json.loads(yanks_path.read_bytes()) if yanks_path.exists() else []
-    if not isinstance(yanks, list) or any(
-        not isinstance(e, dict)
-        or set(e) != {"sha256", "reason"}
-        or not isinstance(e["sha256"], str)
-        or not isinstance(e["reason"], str)
-        for e in yanks
-    ):
-        raise ValueError("invalid native yank list")
-    yanked = {e["sha256"] for e in yanks}
+    yanked = load_yanked(repo)
     records = set()
     for record in load_releases(repo):
         if record.native:
@@ -160,7 +169,7 @@ def validate_native(repo: Path) -> None:
             ):
                 raise ValueError("compressed Packages differs")
             wanted = {
-                (e.sha256, e.path, e.size)
+                (e.sha256, e.path, e.size, e.name, e.version, e.arch)
                 for e in entries
                 if (e.channel, e.format, e.arch) == (channel, "deb", arch)
             }
@@ -207,6 +216,9 @@ def validate_native(repo: Path) -> None:
                 location = package_node.find("{*}location")
                 checksum = package_node.find("{*}checksum")
                 size_node = package_node.find("{*}size")
+                name_node = package_node.find("{*}name")
+                arch_node = package_node.find("{*}arch")
+                version_node = package_node.find("{*}version")
                 if (
                     location is None
                     or checksum is None
@@ -214,15 +226,37 @@ def validate_native(repo: Path) -> None:
                     or checksum.get("type") != "sha256"
                 ):
                     raise ValueError("invalid primary package")
+                if (
+                    name_node is None
+                    or not name_node.text
+                    or arch_node is None
+                    or not arch_node.text
+                    or version_node is None
+                    or not {"epoch", "ver", "rel"} <= version_node.attrib.keys()
+                ):
+                    raise ValueError("invalid primary package identity")
+                epoch = version_node.attrib["epoch"]
+                version = (
+                    (f"{epoch}:" if epoch != "0" else "")
+                    + version_node.attrib["ver"]
+                    + (
+                        f"-{version_node.attrib['rel']}"
+                        if version_node.attrib["rel"]
+                        else ""
+                    )
+                )
                 packages.add(
                     (
                         checksum.text or "",
                         location.attrib["href"],
                         int(size_node.attrib["package"]),
+                        name_node.text,
+                        version,
+                        arch_node.text,
                     )
                 )
             wanted = {
-                (e.sha256, e.path, e.size)
+                (e.sha256, e.path, e.size, e.name, e.version, e.arch)
                 for e in entries
                 if (e.channel, e.format, e.arch) == (channel, "rpm", arch)
             }

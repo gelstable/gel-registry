@@ -62,6 +62,11 @@ def test_render_native_metadata_and_unchanged(native_repo: Any, capsys: Any) -> 
     assert [node.text for node in root.findall("{*}package/{*}name")] == [
         "gel-server-7"
     ]
+    location = root.find("{*}package/{*}location")
+    assert location is not None
+    assert location.attrib["{http://www.w3.org/XML/1998/namespace}base"] == (
+        "https://registry.gelstable.com/rpm/"
+    )
     lock = json.loads((repo / "native/packages.lock.json").read_bytes())
     assert {p["name"] for p in lock} == {"gel-cli", "gel-server-7", "gel-7"}
     assert {p["version"] for p in lock} == {"1:7.1-1"}
@@ -324,3 +329,88 @@ def test_yanked_bytes_still_require_manifest_digest(
     )
     assert render(native_repo)[2] == 1
     assert "native package SHA-256 or size mismatch" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("filename", ["packages.lock.json", "yanked.json"])
+@pytest.mark.parametrize("kind", ["file", "parent", "dangling"])
+def test_render_rejects_native_input_symlinks(
+    native_repo: Any, filename: str, kind: str, capsys: Any
+) -> None:
+    repo, _, _ = native_repo
+    (repo / "native").mkdir()
+    outside = repo.parent / "outside"
+    path = repo / "native" / filename
+    if kind == "parent":
+        outside.mkdir()
+        (outside / filename).write_bytes(b"[]\n")
+        (repo / "native").rmdir()
+        (repo / "native").symlink_to(outside, target_is_directory=True)
+    else:
+        if kind == "file":
+            outside.write_bytes(b"[]\n")
+        path.symlink_to(outside)
+    assert render(native_repo)[2] == 1
+    assert "symlink" in capsys.readouterr().err
+    assert not (repo / "public/apt").exists()
+    if kind == "file":
+        assert outside.read_bytes() == b"[]\n"
+
+
+@pytest.mark.parametrize("digest", ["not-a-digest", "A" * 64, "a" * 63, "a" * 65])
+def test_render_rejects_invalid_yank_digest(
+    native_repo: Any, digest: str, capsys: Any
+) -> None:
+    repo, _, _ = native_repo
+    (repo / "native").mkdir()
+    (repo / "native/yanked.json").write_text(
+        json.dumps([{"sha256": digest, "reason": "withdrawn"}])
+    )
+    assert render(native_repo)[2] == 1
+    assert "yank" in capsys.readouterr().err
+    assert not (repo / "native/packages.lock.json").exists()
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("failure", ["copy", "rpm-install", "lock-install"])
+def test_render_install_failure_preserves_previous_output(
+    native_repo: Any, monkeypatch: Any, existing: bool, failure: str
+) -> None:
+    import os
+    import shutil
+
+    repo, _, package = native_repo
+    package()
+    if existing:
+        assert render(native_repo)[2] == 0
+        package(revision="2")
+    before = {
+        str(path.relative_to(repo)): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file()
+    }
+    copytree = shutil.copytree
+    replace = os.replace
+
+    def fail_copy(src: Any, dst: Any, *args: Any, **kwargs: Any) -> Any:
+        if Path(src).name == "rpm":
+            raise OSError("injected metadata copy failure")
+        return copytree(src, dst, *args, **kwargs)
+
+    def fail_replace(src: Any, dst: Any, *args: Any, **kwargs: Any) -> Any:
+        target = repo / (
+            "public/rpm" if failure == "rpm-install" else "native/packages.lock.json"
+        )
+        if Path(dst) == target and ".backup" not in str(src):
+            raise OSError("injected installation failure")
+        return replace(src, dst, *args, **kwargs)
+
+    if failure == "copy":
+        monkeypatch.setattr(shutil, "copytree", fail_copy)
+    else:
+        monkeypatch.setattr(os, "replace", fail_replace)
+    assert render(native_repo)[2] == 1
+    assert before == {
+        str(path.relative_to(repo)): path.read_bytes()
+        for path in repo.rglob("*")
+        if path.is_file()
+    }

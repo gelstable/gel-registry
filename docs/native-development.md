@@ -12,7 +12,11 @@ The renderer downloads and verifies native assets from release records, validate
 package ownership and RPM signatures, and generates APT and RPM metadata with
 standard distribution tools. The signing public key must be available at
 `public/keys/gelstable.asc`. Only metadata and `native/packages.lock.json` are
-written to the repository; package blobs remain in the cache.
+written to the repository; package blobs remain in the cache. Metadata and the
+lock are staged on their destination filesystems before installation. If a copy
+or install fails, the previous trees and lock are preserved or restored. Each
+rename is atomic, but the complete installation is not crash-atomic. If rollback
+also fails, staging directories containing backups are retained for recovery.
 
 `--base-url` defaults to `https://registry.gelstable.com` and controls the RPM
 package URL base. For example, use `--base-url http://localhost:8000` when testing
@@ -28,7 +32,9 @@ render, including empty repositories.
 
 To withdraw an asset, add `{ "sha256": "<digest>", "reason": "<reason>" }` to
 `native/yanked.json`, a JSON array. Downloads and package validation failures
-abort rendering; they are never recorded as release rejections.
+abort rendering; they are never recorded as release rejections. Yank digests must
+be exactly 64 lowercase hexadecimal characters. Lock and yank inputs must be
+regular files with no symlinks in their paths.
 
 ## Signing and offline validation
 
@@ -42,8 +48,10 @@ It immediately verifies each signature against `public/keys/gelstable.asc`.
 package sets, the lock against release records after yanks, and unexpected
 repository files. Validation needs only public metadata and the public key;
 it does not download packages or read the signing key home. Package name and
-version identities are checked during rendering; offline checks compare the
-record and metadata fields available without package binaries.
+version identities are checked during rendering; offline checks also compare
+lock names, full versions, and architectures against signed APT/RPM metadata.
+Release records bind the artifact URL, digest, size, and channel without package
+binaries.
 
 ## Local Linux tests
 

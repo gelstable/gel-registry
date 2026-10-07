@@ -304,3 +304,64 @@ def test_conflicting_duplicate_lock_artifact_rejected(
     path.write_text(json.dumps(lock))
     with pytest.raises(ValueError, match="duplicate native lock artifact"):
         validate_native(repo)
+
+
+@pytest.mark.parametrize("filename", ["packages.lock.json", "yanked.json"])
+@pytest.mark.parametrize("target_kind", ["file", "directory", "dangling"])
+def test_native_input_symlinks_rejected(
+    native_repo: Any, monkeypatch: Any, filename: str, target_kind: str
+) -> None:
+    repo = signed(native_repo, monkeypatch)
+    path = repo / "native" / filename
+    target = repo.parent / "outside.json"
+    if target_kind == "file":
+        target.write_bytes(path.read_bytes() if path.exists() else b"[]\n")
+    elif target_kind == "directory":
+        target.mkdir()
+    path.unlink(missing_ok=True)
+    path.symlink_to(target)
+    with pytest.raises(ValueError, match="symlink"):
+        validate_native(repo)
+
+
+def test_native_input_parent_symlink_rejected(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    repo = signed(native_repo, monkeypatch)
+    native = repo / "native"
+    outside = repo.parent / "outside"
+    native.rename(outside)
+    native.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        validate_native(repo)
+
+
+@pytest.mark.parametrize("digest", ["not-a-digest", "A" * 64, "a" * 63, "a" * 65])
+def test_invalid_yank_digest_rejected_offline(
+    native_repo: Any, monkeypatch: Any, digest: str
+) -> None:
+    repo = signed(native_repo, monkeypatch)
+    (repo / "native/yanked.json").write_text(
+        json.dumps([{"sha256": digest, "reason": "withdrawn"}])
+    )
+    with pytest.raises(ValueError, match="yank"):
+        validate_native(repo)
+
+
+@pytest.mark.parametrize("fmt", ["deb", "rpm"])
+@pytest.mark.parametrize("field", ["name", "version", "arch"])
+def test_lock_identity_must_match_signed_metadata(
+    native_repo: Any, monkeypatch: Any, fmt: str, field: str
+) -> None:
+    repo = signed(native_repo, monkeypatch)
+    path = repo / "native/packages.lock.json"
+    entries = json.loads(path.read_bytes())
+    entry = next(item for item in entries if item["format"] == fmt)
+    entry[field] = {
+        "name": "gel-server-99",
+        "version": "9:99.0-1",
+        "arch": "arm64" if fmt == "deb" else "aarch64",
+    }[field]
+    path.write_text(json.dumps(entries))
+    with pytest.raises(ValueError, match="match native lock"):
+        validate_native(repo)
