@@ -35,7 +35,7 @@ _CACHE_POLICY = (
     ("/v1/(.*)", MOVING_CACHE_CONTROL),
     ("/apt/dists/(.*)", "public, max-age=0, s-maxage=60"),
     ("/rpm/(.*)", "public, max-age=0, s-maxage=60"),
-    ("/keys/(.*)", PINNED_CACHE_CONTROL),
+    ("/keys/(.*)", "public, max-age=0, s-maxage=60"),
     ("/apt/pool/(.*)", "public, max-age=300"),
     ("/rpm/pool/(.*)", "public, max-age=300"),
 )

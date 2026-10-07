@@ -57,6 +57,13 @@ def verify_signature(
         if data is not None:
             args.append(str(data))
         status = command(args).decode()
+        unusable = {"REVKEYSIG", "EXPKEYSIG", "EXPSIG", "KEYREVOKED", "KEYEXPIRED"}
+        if any(
+            len(fields := line.split()) > 1 and fields[1] in unusable
+            for line in status.splitlines()
+            if line.startswith("[GNUPG:] ")
+        ):
+            raise ValueError(f"revoked or expired signing key: {signature}")
         signers = [
             line.split()[2]
             for line in status.splitlines()
@@ -79,6 +86,9 @@ def cleartext_matches_release(cleartext: bytes, release: bytes) -> bool:
 
 def sign_native(repo: Path) -> None:
     """Sign only APT Release and RPM repomd.xml using the operator environment."""
+    from ..validation.native import validate_native_structure
+
+    validate_native_structure(repo)
     fingerprint = os.environ.get("GELSTABLE_SIGNING_FPR", "").upper()
     if not re.fullmatch(r"(?:[0-9A-F]{40}|[0-9A-F]{64})", fingerprint):
         raise ValueError("GELSTABLE_SIGNING_FPR must be a full signing fingerprint")

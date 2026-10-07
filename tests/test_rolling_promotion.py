@@ -7,7 +7,7 @@ import json
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import pytest
 from pytest_httpx import HTTPXMock
@@ -22,7 +22,22 @@ SCRIPT = Path(__file__).parents[1] / ".github" / "scripts" / "promote.py"
 
 
 class PromotionScript(Protocol):
-    def main(self, *, run: Callable[[list[str]], str]) -> None: ...
+    def build(
+        self,
+        *,
+        run: Callable[[list[str]], str],
+        cache: str = "/tmp/gel-registry-packages",
+    ) -> dict[str, Any]: ...
+    def publish(
+        self, result: dict[str, Any], *, run: Callable[[list[str]], str]
+    ) -> None: ...
+
+
+def _build_and_publish(
+    promote: PromotionScript, *, run: Callable[[list[str]], str]
+) -> None:
+    """Unit-test build/publish contracts; full transport is tested separately."""
+    promote.publish(promote.build(run=run), run=run)
 
 
 @pytest.fixture
@@ -150,7 +165,7 @@ def test_candidate_push_uses_the_observed_remote_oid_as_a_force_with_lease(
     """A concurrent branch update cannot be overwritten."""
     recorder = Recorder(_responses())
 
-    promote.main(run=recorder)
+    _build_and_publish(promote, run=recorder)
 
     assert [
         "git",
@@ -167,7 +182,7 @@ def test_candidate_commit_uses_github_actions_bot_identity(
     """The workflow can commit from a clean Actions checkout."""
     recorder = Recorder(_responses())
 
-    promote.main(run=recorder)
+    _build_and_publish(promote, run=recorder)
 
     assert [
         "git",
@@ -188,7 +203,7 @@ def test_unexpected_candidate_path_aborts_before_commit_or_push(
     recorder = Recorder(_responses(status="?? unexpected.txt\n"))
 
     with pytest.raises(RuntimeError, match="unexpected candidate path"):
-        promote.main(run=recorder)
+        _build_and_publish(promote, run=recorder)
 
     assert not any(
         _is_git_subcommand(command, "commit") for command in recorder.commands
@@ -207,7 +222,7 @@ def test_dirty_working_tree_aborts_immediately(
     recorder = Recorder(responses)
 
     with pytest.raises(RuntimeError, match="checkout is not clean"):
-        promote.main(run=recorder)
+        _build_and_publish(promote, run=recorder)
 
     assert len(recorder.commands) == 1
 
@@ -223,7 +238,7 @@ def test_unexpected_existing_candidate_diff_aborts(
     recorder = Recorder(responses)
 
     with pytest.raises(RuntimeError, match="unexpected existing candidate path"):
-        promote.main(run=recorder)
+        _build_and_publish(promote, run=recorder)
 
     assert not any(command[:2] == ["git", "switch"] for command in recorder.commands)
 
@@ -248,7 +263,7 @@ def test_no_changes_deletes_candidate_branch_and_closes_open_pr(
     ] = '[{"number": 42}]\n'
     recorder = Recorder(responses)
 
-    promote.main(run=recorder)
+    _build_and_publish(promote, run=recorder)
 
     assert [
         "git",
@@ -283,7 +298,7 @@ def test_candidate_updates_existing_open_pr(
     ] = '[{"number": 42}]\n'
     recorder = Recorder(responses)
 
-    promote.main(run=recorder)
+    _build_and_publish(promote, run=recorder)
 
     assert any(
         command[:4] == ["gh", "pr", "edit", "42"] for command in recorder.commands
@@ -588,7 +603,7 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
         ): "",
     }
     recorder1 = Recorder(run1_responses)
-    promote.main(run=recorder1)
+    _build_and_publish(promote, run=recorder1)
 
     assert any(cmd[:3] == ["gh", "pr", "create"] for cmd in recorder1.commands)
     assert not any(cmd[:3] == ["gh", "pr", "edit"] for cmd in recorder1.commands)
@@ -679,7 +694,7 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
         ): "",
     }
     recorder2 = Recorder(run2_responses)
-    promote.main(run=recorder2)
+    _build_and_publish(promote, run=recorder2)
 
     assert any(cmd[:4] == ["gh", "pr", "edit", "12"] for cmd in recorder2.commands)
     assert not any(cmd[:3] == ["gh", "pr", "create"] for cmd in recorder2.commands)
@@ -698,7 +713,7 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
     recorder3 = ErrorRunner(run3_responses)
 
     with pytest.raises(RuntimeError, match="duplicate replacement claim"):
-        promote.main(run=recorder3)
+        _build_and_publish(promote, run=recorder3)
 
     assert not any(_is_git_subcommand(cmd, "commit") for cmd in recorder3.commands)
     assert not any(cmd[:2] == ["git", "push"] for cmd in recorder3.commands)
@@ -707,7 +722,7 @@ def test_rolling_promotion_script_sequence_a_then_b_and_conflict_aborts(
 
 def test_build_has_no_signing_or_remote_mutations(promote: PromotionScript) -> None:
     recorder = Recorder(_responses())
-    result = promote.build(run=recorder, cache="/tmp/cache")  # type: ignore[attr-defined]
+    result = promote.build(run=recorder, cache="/tmp/cache")
     assert result["rejected"] == []
     assert [
         "gel-registry",
@@ -734,7 +749,7 @@ def test_publish_validates_before_committing_and_never_downloads(
     promote: PromotionScript,
 ) -> None:
     recorder = Recorder(_responses())
-    promote.publish({"observed_oid": "abc123", "rejected": []}, run=recorder)  # type: ignore[attr-defined]
+    promote.publish({"observed_oid": "abc123", "rejected": []}, run=recorder)
     validate = recorder.commands.index(["gel-registry", "validate", "--repo", "."])
     commit = next(
         i
@@ -829,7 +844,7 @@ def test_native_lock_diff_is_in_pr_body(promote: PromotionScript) -> None:
         '-    "name": "gel-old",\n+    "name": "gel-cli",\n'
     )
     recorder = Recorder(responses)
-    promote.main(run=recorder)
+    _build_and_publish(promote, run=recorder)
     create = next(cmd for cmd in recorder.commands if cmd[:3] == ["gh", "pr", "create"])
     body = create[-1]
     assert '-    "name": "gel-old",' in body

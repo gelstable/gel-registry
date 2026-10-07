@@ -73,7 +73,14 @@ def test_unsigned_artifact_sign_and_publish_without_package_cache(
     shutil.rmtree(cache)
     monkeypatch.chdir(checkout)
     run(["git", "update-ref", "refs/remotes/origin/main", base])
-    promote.apply_artifact(artifact)
+    assert (
+        run(["python", str(script), "apply", "--artifact", str(artifact)]).strip()
+        == "sign"
+    )
+    assert (
+        run(["gel-registry", "native", "validate", "--unsigned", "--repo", "."]).strip()
+        == "ok"
+    )
     assert not list(checkout.rglob("*.deb"))
     assert not list(checkout.rglob("*.rpm"))
     assert not validate_local(checkout).ok
@@ -99,6 +106,16 @@ def test_unsigned_artifact_sign_and_publish_without_package_cache(
     assert any(cmd[:2] == ["git", "push"] for cmd in external)
     assert "native/packages.lock.json" in run(
         ["git", "show", "--format=", "--name-only"]
+    )
+
+    # A complete signed generation crosses the CLI boundary as a real no-op.
+    noop = tmp_path / "noop-artifact"
+    next_base = run(["git", "rev-parse", "HEAD"]).strip()
+    no_change = {"base_oid": next_base, "observed_oid": "", "native_changed": False}
+    promote.write_artifact(noop, no_change)
+    assert (
+        run(["python", str(script), "apply", "--artifact", str(noop)]).strip()
+        == "unchanged"
     )
 
     unknown = checkout / "public/unexpected"

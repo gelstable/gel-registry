@@ -187,10 +187,10 @@ def publish(result: dict[str, Any], *, run: Runner = _run) -> None:
     )
     _validate_paths(changed, description="candidate")
     observed_oid = result["observed_oid"]
+    run(["gel-registry", "validate", "--repo", "."])
     if not changed:
         _delete_candidate_and_close_pr(run, observed_oid)
         return
-    run(["gel-registry", "validate", "--repo", "."])
     run(["git", "add", "--", *ALLOWED_PREFIXES, *sorted(ALLOWED_EXACT)])
     staged = run(["git", "diff", "--name-only", "--cached"]).splitlines()
     _validate_paths(staged, description="staged candidate")
@@ -300,11 +300,6 @@ def apply_artifact(source: Path, *, run: Runner = _run) -> dict[str, Any]:
             _safe_path(path).unlink(missing_ok=True)
         archive.extractall(filter="data")
     return result
-
-
-def main(*, run: Runner = _run) -> None:
-    """Local orchestration retained for the portable promotion contract tests."""
-    publish(build(run=run), run=run)
 
 
 def cli() -> None:

@@ -220,6 +220,14 @@ def _run_native_sign(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_native_validate(args: argparse.Namespace) -> int:
+    from .validation.native import validate_native, validate_native_structure
+
+    (validate_native_structure if args.unsigned else validate_native)(Path(args.repo))
+    print("ok")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gel-registry")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -235,6 +243,10 @@ def _build_parser() -> argparse.ArgumentParser:
     native_sign = native_commands.add_parser("sign")
     _add_repo(native_sign)
     native_sign.set_defaults(handler=_run_native_sign)
+    native_validate = native_commands.add_parser("validate")
+    _add_repo(native_validate)
+    native_validate.add_argument("--unsigned", action="store_true")
+    native_validate.set_defaults(handler=_run_native_validate)
 
     capture_parser = commands.add_parser("capture", help="capture legacy indexes")
     _add_repo(capture_parser)

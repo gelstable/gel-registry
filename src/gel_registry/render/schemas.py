@@ -60,8 +60,20 @@ def is_approved_release_record_predecessor(data: bytes) -> bool:
     )
 
 
+_APPROVED_ZERO_SIZE_SCHEMAS = {
+    "release-manifest.json": (
+        "0ef1569afa79e57cb7bab206e9fd87d941c76c89b74db4b93fdbd53a748a4e19"
+    ),
+    "release-record.json": (
+        "5dcb30a6f0cc5442d87d44b2d8ab2a45fa54a8895cee3bbaf5e0fa59cca51b88"
+    ),
+}
+
+
 def is_approved_release_schema_predecessor(name: str, data: bytes) -> bool:
     """Recognize approved predecessor bytes only for their exact schema name."""
+    if hash_bytes(data).sha256 == _APPROVED_ZERO_SIZE_SCHEMAS.get(name):
+        return True
     if name == "release-record.json":
         return is_approved_release_record_predecessor(data)
     return (

@@ -67,7 +67,7 @@ class NativePackage(Replacement):
         )
     )
     sha256: str = Field(pattern=HEX64.pattern)
-    size: int = Field(strict=True, ge=0)
+    size: int = Field(strict=True, gt=0)
 
     @field_validator("url")
     @classmethod

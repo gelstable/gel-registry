@@ -8,12 +8,18 @@ signing custody and is not available from the checkout. Signing newly rendered
 metadata requires the authorized automation subkey.
 
 Run `gel-registry native render --repo . --cache /tmp/gel-native-cache --out public`.
-The renderer downloads and verifies native assets from release records, validates
-package ownership and RPM signatures, and generates APT and RPM metadata with
-standard distribution tools. The signing public key must be available at
-`public/keys/gelstable.asc`. Only metadata and `native/packages.lock.json` are
-written to the repository; package blobs remain in the cache. Metadata and the
-lock are staged on their destination filesystems before installation. If a copy
+The renderer downloads and verifies only newly seen native assets, validates
+ownership and RPM signatures, and extracts their full metadata using standard
+distribution tools. It retains Debian stanzas and RPM primary/filelists/other
+package records in `native/package-metadata.json`, keyed by SHA-256. Routine
+promotions merge these records into complete client indexes; old package bytes
+are not needed. Existing repositories bootstrap this retained metadata once.
+The signing public key must be available at `public/keys/gelstable.asc`.
+A changed certificate requires fresh verification of live RPM assets; withdrawn
+assets keep their reserved identities without fetching bytes again.
+Package blobs remain in the temporary cache, while metadata, the lock, retained
+package records and render state are installed in the repository. All generation
+files are staged on their destination filesystems before installation. If a copy
 or install fails, the previous trees and lock are preserved or restored. Each
 rename is atomic, but the complete installation is not crash-atomic. If rollback
 also fails, staging directories containing backups are retained for recovery.
@@ -26,8 +32,15 @@ The lock is a sorted JSON array. Each entry contains `channel`, `format` (`deb`
 or `rpm`), `name`, full `version` (including epoch and revision), native `arch`,
 `sha256`, `size`, and a format-root-relative `path` such as
 `pool/gel-cli/pkg-gel-cli-7.1-1/gel-cli-7.1-1-amd64.deb`.
-A matching committed lock leaves metadata untouched. Remove the lock to request
-a fresh render. Both channels and architectures are generated on the first
+`native/render-state.json` tracks the full input generation and unsigned output
+hashes. A no-op requires matching inputs, intact output and valid signatures;
+matching lock bytes alone are insufficient. Changed base URL, certificate or
+Release options, deleted/corrupted metadata, and missing signatures all request
+a new generation. Retained records allow recovery without fetching old packages.
+Remove the render state to request a fresh aggregate render. To repeat extraction,
+remove both retained records and render state; this fetches historical assets.
+Restore damaged retained records from Git rather than discarding withdrawn
+identity history. Both channels and architectures are generated on the first
 render, including empty repositories.
 
 To withdraw an asset, add `{ "sha256": "<digest>", "reason": "<reason>" }` to
@@ -37,6 +50,12 @@ be exactly 64 lowercase hexadecimal characters. Lock and yank inputs must be
 regular files with no symlinks in their paths.
 
 ## Signing and offline validation
+
+Check unsigned structure first with
+`gel-registry native validate --unsigned --repo .`. This requires no secrets or
+signatures and checks records, lock, package indexes, checksums and inventory.
+The privileged promotion job runs it before importing a signing secret;
+`native sign` also runs it before writing any signature.
 
 After rendering, set `GNUPGHOME` to the signing key home and
 `GELSTABLE_SIGNING_FPR` to the full signing subkey fingerprint, then run

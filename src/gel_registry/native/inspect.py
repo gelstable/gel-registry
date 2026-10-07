@@ -7,6 +7,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from .metadata import deb_fields
+from .models import PackageIdentity, format_evr
+
 
 def _run(args: list[str]) -> str:
     result = subprocess.run(args, check=False, capture_output=True, text=True)
@@ -19,23 +22,19 @@ def _run(args: list[str]) -> str:
 
 def inspect_package(
     path: Path, fmt: str, patterns: list[str], key: Path | None
-) -> tuple[str, str, str, str, str, str]:
+) -> PackageIdentity:
     """Validate ownership/architecture and return the standard-tool header identity.
 
     A supplied key also requires a trusted RPM signature. Only withdrawn records
     may pass None: their digest-verified bytes reserve identities, never indexes.
     """
     if fmt == "deb":
+        # Querying Version alone normalizes an explicit zero epoch. The complete
+        # control block preserves the spelling apt-ftparchive publishes.
+        fields = deb_fields(_run(["dpkg-deb", "--field", str(path)]))
         name, full_version, arch = (
-            _run(["dpkg-deb", "--field", str(path), field])
-            for field in ("Package", "Version", "Architecture")
+            fields[field] for field in ("Package", "Version", "Architecture")
         )
-        epoch, separator, rest = full_version.partition(":")
-        if not separator:
-            epoch, rest = "0", epoch
-        version, separator, release = rest.rpartition("-")
-        if not separator:
-            version, release = rest, ""
         allowed = ("amd64", "arm64")
     elif fmt == "rpm":
         name, epoch, version, release, arch = _run(
@@ -47,6 +46,7 @@ def inspect_package(
                 str(path),
             ]
         ).split("\t")
+        full_version = format_evr(epoch, version, release)
         allowed = ("x86_64", "aarch64")
         if key is not None:
             with tempfile.TemporaryDirectory(prefix="native-rpm-keys-") as directory:
@@ -75,4 +75,6 @@ def inspect_package(
         raise ValueError(f"native package name is not allowed: {name}")
     if arch not in allowed:
         raise ValueError(f"unsupported native architecture: {arch}")
-    return fmt, name, epoch, version, release, arch
+    return PackageIdentity.model_validate(
+        {"format": fmt, "name": name, "version": full_version, "arch": arch}
+    )

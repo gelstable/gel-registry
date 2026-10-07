@@ -33,6 +33,10 @@ def build(output: Path, base_url: str) -> None:
             package("gel-7", fmt, arch=arch)
         public = repo / "public"
         render_native(repo, cache, public, base_url + "/valid")
+        # Exercise retained metadata composition before real clients install.
+        for fmt in ("deb", "rpm"):
+            package("gel-7", fmt, arch=arch, revision="2")
+        render_native(repo, cache, public, base_url + "/valid")
         os.environ["GNUPGHOME"] = str(root / "gnupg")
         listing = subprocess.check_output(
             ["gpg", "--with-colons", "--list-secret-keys"], text=True

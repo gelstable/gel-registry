@@ -117,7 +117,7 @@
           "type": "string"
         },
         "size": {
-          "minimum": 0,
+          "exclusiveMinimum": 0,
           "title": "Size",
           "type": "integer"
         },

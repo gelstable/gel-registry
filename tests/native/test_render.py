@@ -33,7 +33,9 @@ def render(fixture: Any) -> tuple[Path, Path, int]:
     return repo, out, result
 
 
-def test_render_native_metadata_and_unchanged(native_repo: Any, capsys: Any) -> None:
+def test_render_native_metadata_and_unchanged(
+    native_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
     _, _, package = native_repo
     package("gel-cli")
     package("gel-server-7", "rpm")
@@ -71,6 +73,9 @@ def test_render_native_metadata_and_unchanged(native_repo: Any, capsys: Any) -> 
     assert {p["name"] for p in lock} == {"gel-cli", "gel-server-7", "gel-7"}
     assert {p["version"] for p in lock} == {"1:7.1-1"}
     assert all(not p["path"].startswith("pool/gelstable/") for p in lock)
+    from .test_sign_validate import sign
+
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
     before = {
         p: (p.read_bytes(), p.stat().st_mtime_ns)
         for p in repo.rglob("*")
@@ -307,22 +312,21 @@ def test_yanked_rpm_reservation_survives_trust_key_rotation(
     assert render(native_repo)[2] == 1
 
 
-def test_yanked_bytes_still_require_manifest_digest(
+def test_first_seen_yanked_bytes_still_require_manifest_digest(
     native_repo: Any, monkeypatch: Any, capsys: Any
 ) -> None:
     from io import BytesIO
 
     repo, cache, package = native_repo
     record = package()
-    assert render(native_repo)[2] == 0
     digest = record["native"]["packages"][0]["sha256"]
+    (repo / "native").mkdir()
     (repo / "native/yanked.json").write_text(
         json.dumps([{"sha256": digest, "reason": "withdrawn"}])
     )
     blob = cache / digest
     raw = blob.read_bytes()
     blob.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
-    # Serve the same corrupted bytes locally; no GitHub request in this regression.
     monkeypatch.setattr(
         "gel_registry.native.fetch.urlopen",
         lambda url, timeout: BytesIO(blob.read_bytes()),

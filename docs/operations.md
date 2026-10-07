@@ -643,8 +643,10 @@ subsequent rotations. The deleted development private key cannot be reused.
    fingerprint and key status in `README.md` and `docs/native-packages.md` to
    match the newly generated file exactly.
 4. Re-sign **all** existing APT and RPM metadata, even if the package lock is
-   unchanged. Ordinary promotion signs only changed native metadata; a render
-   no-op is not a rotation. Import the signing subkey into a temporary protected
+   unchanged. Updating the public certificate makes the renderer request a new
+   generation and reverify live RPM assets. First run
+   `uv run gel-registry native render --repo . --cache /tmp/gel-native-cache --out public`.
+   Then import the signing subkey into a temporary protected
    key home and run:
 
    ```sh
@@ -668,7 +670,10 @@ subsequent rotations. The deleted development private key cannot be reused.
    existing RPM assets signed by it. Re-signing RPMs changes their bytes and
    digests: publish replacement assets with higher revisions and new manifests,
    yank compromised assets as appropriate, and rebuild native metadata.
-   Metadata re-signing alone does not change RPM package signatures.
+   Metadata re-signing alone does not change RPM package signatures. Run
+   `uv run gel-registry native render --repo . --cache /tmp/gel-native-cache --out public`
+   after changing the certificate, before signing; this rechecks live RPM trust
+   even if no package versions changed.
 6. Publish the reviewed change and issue an advisory with the affected key,
    replacement primary fingerprint, affected releases and client remediation.
    Tell APT users to re-download `/etc/apt/keyrings/gelstable.asc` and verify its
@@ -720,3 +725,27 @@ Read the failing distribution, architecture and channel logs, and separate:
 Track skipped empty channels separately from passing installs. After a reviewed
 fix is deployed, rerun the failed mode and verify the actual queries and retained
 data. Keep the incident open until the affected matrix entries are accepted.
+
+### Incremental native publication and repair
+
+Ordinary promotion downloads and inspects only new package digests. Complete
+Debian control stanzas and RPM primary, filelists and other records are retained
+in `native/package-metadata.json`; aggregate client indexes are recomposed from
+these records after applying withdrawals. Withdrawn identities remain reserved.
+The Actions job no longer caches cumulative copies of historical package blobs.
+A candidate not yet merged into main may need its new assets fetched again on
+the next scheduled run.
+
+`native/render-state.json` tracks render inputs and unsigned output hashes.
+Changed URLs/options/certificates and missing or corrupted metadata trigger
+rendering even when the package lock is unchanged. Missing or invalid signatures
+request re-signing. Restore retained records from Git if damaged; deleting them
+loses the ability to repair without historical package access. On first migration,
+existing assets are fetched once to populate complete retained records.
+
+Before signing, run `uv run gel-registry native validate --unsigned --repo .`.
+The publish workflow does this before importing the secret key, and the signer
+repeats the check before creating any signature. Full signed validation remains
+the final publication gate. Certificate changes require live RPM signatures to
+be checked again; withdrawing packages does not require retrieving their bytes.
+The fixed public key URL uses short CDN revalidation with no stale allowance.

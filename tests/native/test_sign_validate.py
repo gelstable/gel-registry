@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from gel_registry.__main__ import main
-from gel_registry.validation.native import validate_native
+from gel_registry.validation.native import validate_native, validate_native_signatures
 
 from .test_render import render
 
@@ -184,7 +184,7 @@ def test_signed_cleartext_must_match_release(
         capture_output=True,
     )
     with pytest.raises(ValueError, match="cleartext"):
-        validate_native(repo)
+        validate_native_signatures(repo)
 
 
 @pytest.mark.parametrize(
@@ -246,7 +246,7 @@ def test_native_records_require_bootstrap(native_repo: Any) -> None:
 
 
 @pytest.mark.parametrize("metadata", ["apt", "rpm"])
-def test_resigned_metadata_must_match_lock(
+def test_signer_rejects_metadata_that_does_not_match_lock(
     native_repo: Any, monkeypatch: Any, metadata: str
 ) -> None:
     import gzip
@@ -288,8 +288,19 @@ def test_resigned_metadata_must_match_lock(
                 assert checksum is not None and size is not None
                 checksum.text = hashlib.sha256(raw).hexdigest()
                 size.text = str(len(raw))
+                open_checksum = data.find("{*}open-checksum")
+                open_size = data.find("{*}open-size")
+                assert open_checksum is not None and open_size is not None
+                open_checksum.text = hashlib.sha256(gzip.decompress(raw)).hexdigest()
+                open_size.text = str(len(gzip.decompress(raw)))
         repomd.write_bytes(ET.tostring(tree))
-    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
+    signatures_before = {
+        path: path.read_bytes()
+        for path in (repo / "public").rglob("*")
+        if path.name in {"InRelease", "Release.gpg", "repomd.xml.asc"}
+    }
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 1
+    assert all(path.read_bytes() == data for path, data in signatures_before.items())
     with pytest.raises(ValueError, match="match native lock"):
         validate_native(repo)
 
@@ -365,3 +376,65 @@ def test_lock_identity_must_match_signed_metadata(
     path.write_text(json.dumps(entries))
     with pytest.raises(ValueError, match="match native lock"):
         validate_native(repo)
+
+
+def test_unsigned_structure_and_signing_reject_bad_packages(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    from gel_registry.validation.native import validate_native_structure
+
+    repo, _, package = native_repo
+    package()
+    assert render(native_repo)[2] == 0
+    validate_native_structure(repo)
+    path = repo / "public/apt/dists/stable/main/binary-amd64/Packages"
+    path.write_bytes(path.read_bytes() + b"\n")
+    with pytest.raises(ValueError):
+        validate_native_structure(repo)
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 1
+    assert not (repo / "public/apt/dists/stable/InRelease").exists()
+
+
+def test_signer_rejects_dependency_edit_with_recomputed_hashes(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    import gzip
+
+    from gel_registry.validation.native import validate_native_structure
+
+    repo, _, package = native_repo
+    package()
+    assert render(native_repo)[2] == 0
+    path = repo / "public/apt/dists/stable/main/binary-amd64/Packages"
+    raw = path.read_bytes().replace(
+        b"Description:", b"Depends: fabricated-dependency\nDescription:"
+    )
+    path.write_bytes(raw)
+    path.with_name("Packages.gz").write_bytes(gzip.compress(raw))
+    release = path.parents[2] / "Release"
+    release.write_bytes(
+        subprocess.check_output(["apt-ftparchive", "release", "."], cwd=release.parent)
+    )
+    with pytest.raises(ValueError, match="generation"):
+        validate_native_structure(repo)
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 1
+    assert not release.with_name("InRelease").exists()
+
+
+def test_revoked_certificate_cannot_validate_old_metadata(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    from gel_registry.native.sign import verify_signature
+
+    repo = signed(native_repo, monkeypatch)
+    home = repo.parent / "gnupg"
+    certificate = next((home / "openpgp-revocs.d").glob("*.rev"))
+    raw = certificate.read_bytes().replace(b"\n:-----BEGIN", b"\n-----BEGIN", 1)
+    subprocess.run(
+        ["gpg", "--batch", "--import"], input=raw, check=True, capture_output=True
+    )
+    key = repo / "public/keys/gelstable.asc"
+    key.write_bytes(subprocess.check_output(["gpg", "--armor", "--export"]))
+    release = repo / "public/apt/dists/stable/Release"
+    with pytest.raises(ValueError):
+        verify_signature(key, release.with_name("Release.gpg"), release)
