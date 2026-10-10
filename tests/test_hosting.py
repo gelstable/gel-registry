@@ -190,9 +190,11 @@ def test_signed_repository_pointers_are_never_matched_as_immutable() -> None:
         path = f"/rpm/stable/x86_64/repodata/{name}"
         assert hashed.fullmatch(path) is None
         assert repomd.fullmatch(path) is not None
-    for path in sorted((REPOSITORY_ROOT / "public" / "rpm").glob("*/*/repodata/*")):
-        url = "/" + path.relative_to(REPOSITORY_ROOT / "public").as_posix()
-        is_pointer = path.name in ("repomd.xml", "repomd.xml.asc")
+    for metadata_path in sorted(
+        (REPOSITORY_ROOT / "public" / "rpm").glob("*/*/repodata/*")
+    ):
+        url = "/" + metadata_path.relative_to(REPOSITORY_ROOT / "public").as_posix()
+        is_pointer = metadata_path.name in ("repomd.xml", "repomd.xml.asc")
         assert (repomd.fullmatch(url) is not None) is is_pointer, url
         assert (hashed.fullmatch(url) is not None) is not is_pointer, url
 

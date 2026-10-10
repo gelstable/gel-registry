@@ -115,3 +115,16 @@ The key exists only in a temporary `GNUPGHOME` in the metadata signing step.
 The step deletes that home on success or failure. The earlier render job has
 no signing secrets and is the only job that downloads and parses package
 files. Publishing and final validation run after key cleanup.
+
+## Product package signing
+
+`gel`, `gel-cli` and `gel-postgis` each store `PACKAGE_SIGNING_KEY` and
+`PACKAGE_SIGNING_FPR` in `package-signing`. Allow the protected default branch
+and protected `release/*` branches, with matching PR-only rulesets and no force
+pushes or deletion. Render/discovery jobs never receive signing secrets.
+
+Run `scripts/set-signing-secrets.sh BUNDLE_DIR` to set all eight registry/product
+secrets from `automation-subkey.asc` and the `signing` field of
+`fingerprints.json`. It lists the destinations and asks for `yes`; key bytes
+are streamed to `gh` and never printed. Keep the bundle on encrypted storage.
+See [custody and recovery](signing-keys.md) and [rotation](operations.md#routine-key-rotation).
