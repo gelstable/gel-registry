@@ -39,7 +39,10 @@ class StoredPackage(BaseModel):
     size: int = Field(gt=0)
     deb: str | None = None
     rpm: dict[str, str] = Field(default_factory=dict)
-    verified_key: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    signer: str | None = Field(
+        default=None,
+        pattern=r"^(?:[0-9A-F]{8}|[0-9A-F]{16}|[0-9A-F]{40}|[0-9A-F]{64})$",
+    )
 
 
 def deb_fields(stanza: str) -> dict[str, str]:

@@ -154,7 +154,7 @@ def build(
     run(["git", "switch", "--detach", "origin/main"])
     run(["git", "switch", "-C", BRANCH])
     result: Any = json.loads(run(["gel-registry", "build-candidate", "--repo", "."]))
-    native = run(
+    run(
         [
             "gel-registry",
             "native",
@@ -175,8 +175,6 @@ def build(
         "base_oid": run(["git", "rev-parse", "HEAD"]).strip(),
         "observed_oid": observed_oid,
         "rejected": result.get("rejected", []),
-        "native_changed": native.strip() == "rendered"
-        or any(path.startswith(("public/apt/", "public/rpm/")) for path in changed),
     }
 
 
@@ -311,8 +309,7 @@ def cli() -> None:
     if args.phase == "build":
         write_artifact(args.artifact, build(cache=args.cache))
     elif args.phase == "apply":
-        result = apply_artifact(args.artifact)
-        print("sign" if result["native_changed"] else "unchanged")
+        apply_artifact(args.artifact)
     else:
         result = json.loads((args.artifact / "result.json").read_text())
         if _run(["git", "rev-parse", "HEAD"]).strip() != result["base_oid"]:

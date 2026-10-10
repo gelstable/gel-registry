@@ -66,7 +66,6 @@ def test_unsigned_artifact_sign_and_publish_without_package_cache(
 
     result = promote.build(run=build_run, cache=str(cache))
     assert result["base_oid"] == base
-    assert result["native_changed"] is True
     assert not (repo / "public/apt/dists/stable/InRelease").exists()
     artifact = tmp_path / "artifact"
     promote.write_artifact(artifact, result)
@@ -74,8 +73,7 @@ def test_unsigned_artifact_sign_and_publish_without_package_cache(
     monkeypatch.chdir(checkout)
     run(["git", "update-ref", "refs/remotes/origin/main", base])
     assert (
-        run(["python", str(script), "apply", "--artifact", str(artifact)]).strip()
-        == "sign"
+        run(["python", str(script), "apply", "--artifact", str(artifact)]).strip() == ""
     )
     assert (
         run(["gel-registry", "native", "validate", "--unsigned", "--repo", "."]).strip()
@@ -111,12 +109,9 @@ def test_unsigned_artifact_sign_and_publish_without_package_cache(
     # A complete signed generation crosses the CLI boundary as a real no-op.
     noop = tmp_path / "noop-artifact"
     next_base = run(["git", "rev-parse", "HEAD"]).strip()
-    no_change = {"base_oid": next_base, "observed_oid": "", "native_changed": False}
+    no_change = {"base_oid": next_base, "observed_oid": ""}
     promote.write_artifact(noop, no_change)
-    assert (
-        run(["python", str(script), "apply", "--artifact", str(noop)]).strip()
-        == "unchanged"
-    )
+    assert run(["python", str(script), "apply", "--artifact", str(noop)]).strip() == ""
 
     unknown = checkout / "public/unexpected"
     unknown.write_text("unexpected")

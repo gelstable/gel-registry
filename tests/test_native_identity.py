@@ -30,24 +30,6 @@ def test_debian_identity_retains_raw_version(monkeypatch: Any, version: str) -> 
     assert identity.version == version
 
 
-def test_retained_metadata_corruption_rejected_offline(tmp_path: Path) -> None:
-    import hashlib
-    import json
-
-    from gel_registry.validation.native import validate_retained
-
-    native = tmp_path / "native"
-    native.mkdir()
-    path = native / "package-metadata.json"
-    path.write_text("{}\n")
-    (native / "render-state.json").write_text(
-        json.dumps({"packages_sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    )
-    path.write_text("{ }\n")
-    with pytest.raises(ValueError, match="retained"):
-        validate_retained(tmp_path, [])
-
-
 @pytest.mark.parametrize("status", ["REVKEYSIG", "EXPKEYSIG", "EXPSIG"])
 def test_unusable_signer_status_is_rejected(
     tmp_path: Path, monkeypatch: Any, status: str

@@ -1,6 +1,9 @@
 name: Promote registry releases
 
 "on":
+  push:
+    branches: [main]
+    paths: [native/yanked.json, "public/keys/**"]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch: {}
@@ -89,17 +92,14 @@ jobs:
           path: ${{ runner.temp }}/candidate/
 
       - name: Apply generated paths
-        id: apply
         run: |
           set -euo pipefail
-          state="$(uv run .github/scripts/promote.py apply --artifact "$RUNNER_TEMP/candidate")"
-          echo "state=$state" >> "$GITHUB_OUTPUT"
+          uv run .github/scripts/promote.py apply --artifact "$RUNNER_TEMP/candidate"
 
       - name: Validate unsigned native structure
         run: uv run gel-registry native validate --unsigned --repo .
 
       - name: Sign and verify native metadata
-        if: steps.apply.outputs.state == 'sign'
         env:
           REGISTRY_SIGNING_KEY: ${{ secrets.REGISTRY_SIGNING_KEY }}
           GELSTABLE_SIGNING_FPR: ${{ secrets.REGISTRY_SIGNING_FPR }}

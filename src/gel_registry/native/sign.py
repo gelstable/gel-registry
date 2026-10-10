@@ -71,6 +71,13 @@ def verify_signature(
         ]
         if not signers or (fingerprint and any(s != fingerprint for s in signers)):
             raise ValueError(f"unexpected signing key: {signature}")
+        from ..validation.native import signing_subkeys
+
+        trusted = signing_subkeys(key)
+        if any(not trusted.get(signer, False) for signer in signers):
+            raise ValueError(
+                f"metadata signer is not a current signing subkey: {signature}"
+            )
         return output.read_bytes() if data is None else b""
 
 
@@ -112,6 +119,16 @@ def sign_native(repo: Path) -> None:
             else [(target.with_name("repomd.xml.asc"), ["--detach-sign", "--armor"])]
         )
         for signature, flags in signatures:
+            try:
+                cleartext = verify_signature(
+                    key, signature, None if "--clearsign" in flags else target
+                )
+                if "--clearsign" not in flags or cleartext_matches_release(
+                    cleartext, target.read_bytes()
+                ):
+                    continue
+            except (ValueError, OSError):
+                pass
             command(
                 [
                     "gpg",

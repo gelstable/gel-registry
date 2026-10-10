@@ -78,3 +78,20 @@ def inspect_package(
     return PackageIdentity.model_validate(
         {"format": fmt, "name": name, "version": full_version, "arch": arch}
     )
+
+
+def rpm_signer(path: Path) -> str:
+    """Read the signature issuer after rpmkeys authenticated the package."""
+    signatures = _run(
+        [
+            "rpm",
+            "-qp",
+            "--queryformat",
+            "%{RSAHEADER:pgpsig}\n%{DSAHEADER:pgpsig}",
+            str(path),
+        ]
+    )
+    issuers: set[str] = set(re.findall(r"Key ID ([0-9a-fA-F]{8,64})", signatures))
+    if len(issuers) != 1:
+        raise ValueError(f"RPM must have exactly one recorded signer: {path}")
+    return issuers.pop().upper()

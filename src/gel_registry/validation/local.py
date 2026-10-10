@@ -73,7 +73,7 @@ def validate_local(repo: Path, base: Path | None = None) -> ValidationReport:
     _check_normalization(repository, manifest, collector)
 
     check_render_drift(repository, collector)
-    check_native(repository, collector)
+    check_native(repository, collector, base)
     if base is not None:
         check_history(repository, Path(base), collector)
     return collector.report()

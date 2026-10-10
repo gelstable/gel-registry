@@ -41,11 +41,11 @@ def build(output: Path, base_url: str) -> None:
         listing = subprocess.check_output(
             ["gpg", "--with-colons", "--list-secret-keys"], text=True
         )
-        os.environ["GELSTABLE_SIGNING_FPR"] = next(
+        os.environ["GELSTABLE_SIGNING_FPR"] = list(
             line.split(":")[9]
             for line in listing.splitlines()
             if line.startswith("fpr:")
-        )
+        )[-1]
         sign_native(repo)
         for item in json.loads((repo / "native/packages.lock.json").read_text()):
             path = public / item["format"].replace("deb", "apt") / item["path"]

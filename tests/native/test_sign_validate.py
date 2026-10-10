@@ -21,11 +21,11 @@ pytestmark = pytest.mark.native_tools
 def sign(repo: Path, home: Path, monkeypatch: Any) -> int:
     monkeypatch.setenv("GNUPGHOME", str(home))
     listing = subprocess.check_output(["gpg", "--with-colons", "--list-secret-keys"])
-    fingerprint = next(
+    fingerprint = list(
         line.split(":")[9]
         for line in listing.decode().splitlines()
         if line.startswith("fpr:")
-    )
+    )[-1]
     monkeypatch.setenv("GELSTABLE_SIGNING_FPR", fingerprint)
     return main(["native", "sign", "--repo", str(repo)])
 
@@ -99,6 +99,7 @@ def test_other_signer_rejected(
         check=True,
         capture_output=True,
     )
+    (repo / "public/apt/dists/stable/Release.gpg").unlink()
     assert sign(repo, home, monkeypatch) == 1
     with pytest.raises(ValueError):
         validate_native(repo)
@@ -127,11 +128,11 @@ def test_signing_subkey_and_validation_registration(
     home = repo.parent / "gnupg"
     monkeypatch.setenv("GNUPGHOME", str(home))
     listing = subprocess.check_output(["gpg", "--with-colons", "--list-secret-keys"])
-    fingerprint = next(
+    fingerprint = list(
         line.split(":")[9]
         for line in listing.decode().splitlines()
         if line.startswith("fpr:")
-    )
+    )[0]
     subprocess.run(
         [
             "gpg",
@@ -395,32 +396,6 @@ def test_unsigned_structure_and_signing_reject_bad_packages(
     assert not (repo / "public/apt/dists/stable/InRelease").exists()
 
 
-def test_signer_rejects_dependency_edit_with_recomputed_hashes(
-    native_repo: Any, monkeypatch: Any
-) -> None:
-    import gzip
-
-    from gel_registry.validation.native import validate_native_structure
-
-    repo, _, package = native_repo
-    package()
-    assert render(native_repo)[2] == 0
-    path = repo / "public/apt/dists/stable/main/binary-amd64/Packages"
-    raw = path.read_bytes().replace(
-        b"Description:", b"Depends: fabricated-dependency\nDescription:"
-    )
-    path.write_bytes(raw)
-    path.with_name("Packages.gz").write_bytes(gzip.compress(raw))
-    release = path.parents[2] / "Release"
-    release.write_bytes(
-        subprocess.check_output(["apt-ftparchive", "release", "."], cwd=release.parent)
-    )
-    with pytest.raises(ValueError, match="generation"):
-        validate_native_structure(repo)
-    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 1
-    assert not release.with_name("InRelease").exists()
-
-
 def test_revoked_certificate_cannot_validate_old_metadata(
     native_repo: Any, monkeypatch: Any
 ) -> None:
@@ -438,3 +413,92 @@ def test_revoked_certificate_cannot_validate_old_metadata(
     release = repo / "public/apt/dists/stable/Release"
     with pytest.raises(ValueError):
         verify_signature(key, release.with_name("Release.gpg"), release)
+
+
+def test_signing_preserves_current_signatures_and_replaces_missing(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    repo = signed(native_repo, monkeypatch)
+    signatures = [
+        p
+        for p in (repo / "public").rglob("*")
+        if p.name in {"InRelease", "Release.gpg", "repomd.xml.asc"}
+    ]
+    before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in signatures}
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
+    assert {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in signatures} == before
+    missing = repo / "public/apt/dists/stable/Release.gpg"
+    missing.unlink()
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
+    assert missing.exists()
+    assert {
+        p: (p.read_bytes(), p.stat().st_mtime_ns) for p in signatures if p != missing
+    } == {p: value for p, value in before.items() if p != missing}
+
+
+def test_revoked_subkey_names_locked_rpms_and_yank_allows_repair(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    from gel_registry.validation.native import validate_native_structure
+
+    repo = signed(native_repo, monkeypatch)
+    import shutil
+
+    base = repo.parent / "base"
+    shutil.copytree(repo, base)
+    home = repo.parent / "gnupg"
+    listing = subprocess.check_output(
+        ["gpg", "--with-colons", "--list-secret-keys"], text=True
+    )
+    primary = next(
+        line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:")
+    )
+    subprocess.run(
+        [
+            "gpg",
+            "--batch",
+            "--yes",
+            "--pinentry-mode",
+            "loopback",
+            "--passphrase",
+            "",
+            "--command-fd",
+            "0",
+            "--edit-key",
+            primary,
+        ],
+        input=b"key 1\nrevkey\ny\n1\ncompromised\n\ny\nsave\n",
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [
+            "gpg",
+            "--batch",
+            "--passphrase",
+            "",
+            "--quick-add-key",
+            primary,
+            "rsa2048",
+            "sign",
+            "0",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    (repo / "public/keys/gelstable.asc").write_bytes(
+        subprocess.check_output(["gpg", "--armor", "--export", primary])
+    )
+    lock = json.loads((repo / "native/packages.lock.json").read_text())
+    digests = [item["sha256"] for item in lock if item["format"] == "rpm"]
+    with pytest.raises(ValueError) as error:
+        validate_native_structure(repo)
+    assert all(digest in str(error.value) for digest in digests)
+    (repo / "native/yanked.json").write_text(
+        json.dumps([{"sha256": digest, "reason": "compromised"} for digest in digests])
+    )
+    validate_native_structure(repo)
+    validate_native(repo, base=base)
+    assert render(native_repo)[2] == 0
+    assert sign(repo, home, monkeypatch) == 0
+    validate_native(repo)

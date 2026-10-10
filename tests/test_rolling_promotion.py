@@ -776,7 +776,7 @@ def test_artifact_roundtrip_and_stale_base_rejection(
     recorder = Recorder(
         _responses(status="?? native/packages.lock.json\n D public/old.json\n")
     )
-    result = {"base_oid": "base", "observed_oid": "abc123", "native_changed": True}
+    result = {"base_oid": "base", "observed_oid": "abc123"}
     promote.write_artifact(artifact, result, run=recorder)  # type: ignore[attr-defined]
     checkout = tmp_path / "checkout"
     (checkout / "public").mkdir(parents=True)

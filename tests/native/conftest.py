@@ -63,6 +63,28 @@ def native_repo(tmp_path: Path) -> tuple[Path, Path, Callable[..., dict[str, obj
             "--quick-generate-key",
             "Fixture <fixture@example.com>",
             "rsa2048",
+            "cert",
+            "0",
+        ],
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+    listing = subprocess.check_output(
+        ["gpg", "--with-colons", "--list-secret-keys"], env=env
+    ).decode()
+    primary = next(
+        line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:")
+    )
+    subprocess.run(
+        [
+            "gpg",
+            "--batch",
+            "--passphrase",
+            "",
+            "--quick-add-key",
+            primary,
+            "rsa2048",
             "sign",
             "0",
         ],

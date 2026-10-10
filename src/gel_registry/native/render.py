@@ -1,33 +1,26 @@
-"""Incremental native composition with complete-input and output tracking."""
+"""Compose deterministic native repositories from retained package records."""
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
-from .. import storage
 from ..gather import load_repositories
 from ..render.snapshots import load_releases
 from .fetch import fetch_package
-from .inputs import input_path, load_yanked, metadata_inventory
-from .inspect import inspect_package
+from .inputs import input_path, load_yanked
+from .inspect import inspect_package, rpm_signer
 from .metadata import (
-    RELEASE_OPTIONS,
     StoredPackage,
     check_stored,
     compose_metadata,
     extract_metadata,
 )
 from .models import LockEntry, pool_path, version_channel
-
-# Bump when extraction or aggregate formatting changes.
-RENDER_VERSION = 2
 
 
 def _command(args: list[str], cwd: Path) -> bytes:
@@ -39,10 +32,6 @@ def _command(args: list[str], cwd: Path) -> bytes:
 
 def _json(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
-
-
-def _hash(raw: bytes) -> str:
-    return hashlib.sha256(raw).hexdigest()
 
 
 def _load_packages(repo: Path) -> dict[str, StoredPackage]:
@@ -71,36 +60,17 @@ def _identity_key(package: StoredPackage) -> tuple[str, str, str, str]:
 def render_native(
     repo: Path, cache: Path, out: Path, base_url: str = "https://registry.gelstable.com"
 ) -> bool:
-    """Reuse digest-bound package records; rebuild aggregates only when needed."""
-    from ..validation.native import validate_native
-
+    """Reuse package records and rewrite deterministic aggregate trees."""
     repositories = load_repositories(repo)
     config = json.loads((repo / "sources/github.json").read_bytes())
     names = config.get("native_package_names", {})
     lock_path = input_path(repo, "packages.lock.json")
     metadata_path = input_path(repo, "package-metadata.json")
-    state_path = input_path(repo, "render-state.json")
     yanked = load_yanked(repo)
     stored = _load_packages(repo)
-    state = json.loads(state_path.read_bytes()) if state_path.exists() else {}
-    if not isinstance(state, dict):
-        raise ValueError("invalid native render state")
-    if state_path.exists() and not metadata_path.exists():
-        raise ValueError("retained native metadata missing; restore it from Git")
-    if metadata_path.exists() and state.get("packages_sha256") not in (
-        None,
-        _hash(metadata_path.read_bytes()),
-    ):
-        raise ValueError(
-            "retained native metadata changed; restore package-metadata.json "
-            "from the trusted Git generation"
-        )
     key = repo / "public/keys/gelstable.asc"
     if any(path.is_symlink() for path in (key, *key.parents)):
         raise ValueError("symlink in native public key")
-    key_digest = _hash(key.read_bytes())
-    # Check output links even if other changes would otherwise rebuild the tree.
-    inventory = metadata_inventory(out)
     entries: list[LockEntry] = []
     identities: dict[tuple[str, str, str, str], str] = {}
     for digest, retained_package in stored.items():
@@ -122,28 +92,27 @@ def render_native(
                 fmt = package.url.rsplit(".", 1)[1]
                 saved = stored.get(digest)
                 live = digest not in yanked
-                needs_bytes = saved is None or (
-                    live
-                    and (
-                        (fmt == "rpm" and saved.verified_key != key_digest)
-                        or (fmt == "deb" and saved.deb is None)
-                        or (fmt == "rpm" and not saved.rpm)
-                    )
-                )
-                if needs_bytes:
+                if saved is None:
                     blob = fetch_package(package.url, digest, package.size, cache)
                     inspected = inspect_package(
                         blob, fmt, names[repository], key if live else None
                     )
-                    if saved is not None and inspected != saved.identity:
-                        raise ValueError(
-                            "native identity differs from retained metadata"
-                        )
                     saved = StoredPackage(identity=inspected, size=package.size)
-                    if live:
-                        extract_metadata(blob, saved, scratch / digest, _command)
-                        if fmt == "rpm":
-                            saved.verified_key = key_digest
+                    extract_metadata(blob, saved, scratch / digest, _command)
+                    if fmt == "rpm":
+                        saved.signer = rpm_signer(blob)
+                        if live:
+                            from ..validation.native import signing_subkeys
+
+                            matches = [
+                                valid
+                                for fingerprint, valid in signing_subkeys(key).items()
+                                if fingerprint.endswith(saved.signer)
+                            ]
+                            if matches != [True]:
+                                raise ValueError(
+                                    "RPM signer must be a current signing subkey"
+                                )
                     stored[digest] = saved
                 assert saved is not None
                 if saved.size != package.size or saved.identity.format != fmt:
@@ -181,41 +150,50 @@ def render_native(
         retained = _json(
             {digest: value.model_dump() for digest, value in stored.items()}
         )
-        inputs = _hash(
-            _json(
-                {
-                    "version": RENDER_VERSION,
-                    "base_url": base_url.rstrip("/"),
-                    "key": key_digest,
-                    "names": names,
-                    "options": RELEASE_OPTIONS,
-                    "lock": _hash(lock),
-                    "packages": _hash(retained),
-                }
-            )
-        )
-        unchanged = (
-            lock_path.exists()
-            and lock_path.read_bytes() == lock
-            and state.get("inputs") == inputs
-            and state.get("outputs") == inventory
-        )
-        if unchanged and out == repo / "public":
-            try:
-                validate_native(repo)
-            except (ValueError, OSError):
-                unchanged = False
-        if unchanged:
-            return False
         metadata = scratch / "metadata"
         compose_metadata(entries, stored, metadata, base_url, _command)
-        next_state = _json(
-            {
-                "inputs": inputs,
-                "outputs": metadata_inventory(metadata),
-                "packages_sha256": _hash(retained),
-                "base_url": base_url.rstrip("/"),
-            }
+        # Keep old Release dates and signatures when the signed bytes match.
+        for channel in ("stable", "testing"):
+            new = metadata / "apt/dists" / channel / "Release"
+            old = out / "apt/dists" / channel / "Release"
+            if old.is_file() and not old.is_symlink():
+
+                def without_date(raw: bytes) -> bytes:
+                    return b"\n".join(
+                        line
+                        for line in raw.splitlines()
+                        if not line.startswith(b"Date:")
+                    )
+
+                if without_date(new.read_bytes()) == without_date(old.read_bytes()):
+                    new.write_bytes(old.read_bytes())
+        for pattern in (
+            "apt/dists/*/InRelease",
+            "apt/dists/*/Release.gpg",
+            "rpm/*/*/repodata/repomd.xml.asc",
+        ):
+            for old in out.glob(pattern):
+                if old.is_symlink():
+                    raise ValueError("symlink in native output")
+                new = metadata / old.relative_to(out)
+                new.write_bytes(old.read_bytes())
+        before = {
+            str(p.relative_to(out)): p.read_bytes()
+            for fmt in ("apt", "rpm")
+            for p in (out / fmt).rglob("*")
+            if p.is_file() and not p.is_symlink()
+        }
+        after = {
+            str(p.relative_to(metadata)): p.read_bytes()
+            for p in metadata.rglob("*")
+            if p.is_file()
+        }
+        changed = (
+            before != after
+            or not lock_path.exists()
+            or lock_path.read_bytes() != lock
+            or not metadata_path.exists()
+            or metadata_path.read_bytes() != retained
         )
         _install_metadata(
             metadata,
@@ -224,10 +202,9 @@ def render_native(
             lock,
             {
                 metadata_path: retained,
-                state_path: next_state,
             },
         )
-    return True
+    return changed
 
 
 def _install_metadata(
@@ -237,70 +214,17 @@ def _install_metadata(
     lock: bytes,
     native_files: dict[Path, bytes] | None = None,
 ) -> None:
-    """Stage on each destination filesystem, then install with rollback.
-
-    Renames are atomic per path. This restores the old generation on ordinary
-    filesystem errors; it is not a crash-atomic swap of the complete generation.
-    """
+    """Install composed trees; Git restores an interrupted checkout."""
     native_files = {lock_path: lock, **(native_files or {})}
     for path in (out, out / "apt", out / "rpm", *native_files):
         if any(parent.is_symlink() for parent in (path, *path.parents)):
             raise ValueError(f"symlink in native output: {path}")
-    for path in (out / "apt", out / "rpm"):
-        if path.exists() and not path.is_dir():
-            raise ValueError(f"native output is not a directory: {path}")
-    created_dirs: list[Path] = []
-    stages: list[Path] = []
-    moved: list[tuple[Path, Path]] = []
-    installed: list[Path] = []
-    cleanup = True
-    try:
-        created_dirs.extend(storage.ensure_directory_chain(out))
-        created_dirs.extend(storage.ensure_directory_chain(lock_path.parent))
-        trees = Path(tempfile.mkdtemp(prefix=".native-install-", dir=out))
-        stages.append(trees)
-        lock_stage = Path(
-            tempfile.mkdtemp(prefix=".native-install-", dir=lock_path.parent)
-        )
-        stages.append(lock_stage)
-        for fmt in ("apt", "rpm"):
-            shutil.copytree(metadata / fmt, trees / fmt)
-        for path, data in native_files.items():
-            (lock_stage / path.name).write_bytes(data)
-        replacements = [
-            (trees / "apt", out / "apt"),
-            (trees / "rpm", out / "rpm"),
-            *((lock_stage / path.name, path) for path in native_files),
-        ]
-        try:
-            for staged, destination in replacements:
-                backup = staged.with_name(staged.name + ".backup")
-                if destination.exists():
-                    os.replace(destination, backup)
-                    moved.append((destination, backup))
-                os.replace(staged, destination)
-                installed.append(destination)
-        except OSError:
-            try:
-                for destination in reversed(installed):
-                    if destination.is_dir():
-                        shutil.rmtree(destination)
-                    else:
-                        destination.unlink()
-                for destination, backup in reversed(moved):
-                    os.replace(backup, destination)
-            except OSError as exc:
-                # Keep backups for operator recovery if the filesystem also
-                # refuses rollback. Never delete the only remaining old bytes.
-                cleanup = False
-                raise OSError(
-                    f"native installation rollback failed; backups retained in {stages}"
-                ) from exc
-            raise
-    finally:
-        if cleanup:
-            for stage in stages:
-                shutil.rmtree(stage)
-            for directory in reversed(created_dirs):
-                if directory.exists() and not any(directory.iterdir()):
-                    directory.rmdir()
+    out.mkdir(parents=True, exist_ok=True)
+    for fmt in ("apt", "rpm"):
+        destination = out / fmt
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(metadata / fmt, destination)
+    for path, data in native_files.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)

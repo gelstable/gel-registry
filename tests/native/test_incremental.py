@@ -63,7 +63,7 @@ def test_unchanged_lock_repairs_metadata_without_package_bytes(
         "gel_registry.native.render.fetch_package",
         lambda *args: pytest.fail("repair fetched old bytes"),
     )
-    assert render_native(repo, cache, repo / "public") is True
+    assert render_native(repo, cache, repo / "public") is (damage != "signature")
     validate_native_structure(repo)
 
 
@@ -146,7 +146,7 @@ def test_debian_zero_epoch_roundtrip(native_repo: Any) -> None:
     validate_native_structure(repo)
 
 
-def test_certificate_update_rechecks_live_rpm_only(
+def test_certificate_update_never_refetches_retained_packages(
     native_repo: Any, monkeypatch: Any
 ) -> None:
     import os
@@ -154,10 +154,9 @@ def test_certificate_update_rechecks_live_rpm_only(
 
     repo, cache, package = native_repo
     deb = package()
-    rpm = package(fmt="rpm")
+    package(fmt="rpm")
     assert render(native_repo)[2] == 0
     deb_digest = deb["native"]["packages"][0]["sha256"]
-    rpm_digest = rpm["native"]["packages"][0]["sha256"]
     (cache / deb_digest).unlink()
     home = repo.parent / "gnupg"
     env = {**os.environ, "GNUPGHOME": str(home)}
@@ -186,18 +185,14 @@ def test_certificate_update_rechecks_live_rpm_only(
     (repo / "public/keys/gelstable.asc").write_bytes(
         subprocess.check_output(["gpg", "--armor", "--export"], env=env)
     )
-    from gel_registry.native.fetch import fetch_package
-
-    seen = []
+    seen: list[str] = []
 
     def rpm_only(url: str, digest: str, size: int, cache: Path) -> Path:
-        seen.append(digest)
-        assert digest == rpm_digest
-        return fetch_package(url, digest, size, cache)
+        pytest.fail("certificate change fetched retained bytes")
 
     monkeypatch.setattr("gel_registry.native.render.fetch_package", rpm_only)
     assert render(native_repo)[2] == 0
-    assert seen == [rpm_digest]
+    assert seen == []
     validate_native_structure(repo)
 
 
@@ -219,3 +214,53 @@ def test_changed_release_options_rebuilds_without_blobs(
     assert (
         "Label: Updated label" in (repo / "public/apt/dists/stable/Release").read_text()
     )
+
+
+def test_deleted_record_refetches_only_that_package(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    repo, cache, package = native_repo
+    first = package()
+    second = package(revision="2")
+    assert render(native_repo)[2] == 0
+    digest = first["native"]["packages"][0]["sha256"]
+    records_path = repo / "native/package-metadata.json"
+    records = json.loads(records_path.read_text())
+    del records[digest]
+    records_path.write_text(json.dumps(records))
+    from gel_registry.native.fetch import fetch_package
+
+    seen = []
+
+    def fetch(url: str, sha: str, size: int, directory: Path) -> Path:
+        seen.append(sha)
+        return fetch_package(url, sha, size, directory)
+
+    monkeypatch.setattr("gel_registry.native.render.fetch_package", fetch)
+    assert render(native_repo)[2] == 0
+    assert seen == [digest]
+    assert second["native"]["packages"][0]["sha256"] in json.loads(
+        records_path.read_text()
+    )
+
+
+def test_yank_only_pr_validates_before_promotion(
+    native_repo: Any, monkeypatch: Any
+) -> None:
+    from gel_registry.validation.native import validate_native
+
+    from .test_sign_validate import sign
+
+    repo, _, package = native_repo
+    record = package(fmt="rpm")
+    assert render(native_repo)[2] == 0
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
+    digest = record["native"]["packages"][0]["sha256"]
+    (repo / "native/yanked.json").write_text(
+        json.dumps([{"sha256": digest, "reason": "bad"}])
+    )
+    validate_native(repo)
+    assert render(native_repo)[2] == 0
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
+    validate_native(repo)
+    assert json.loads((repo / "native/packages.lock.json").read_text()) == []

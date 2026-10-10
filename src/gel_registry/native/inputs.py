@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from pathlib import Path
@@ -37,23 +36,3 @@ def load_yanked(repo: Path) -> set[str]:
     ):
         raise ValueError("invalid native yank list")
     return {entry["sha256"] for entry in entries}
-
-
-def metadata_inventory(out: Path) -> dict[str, str]:
-    files = {}
-    for fmt in ("apt", "rpm"):
-        root = out / fmt
-        if root.is_symlink():
-            raise ValueError("symlink in native output")
-        for path in root.rglob("*"):
-            if path.is_symlink():
-                raise ValueError(f"symlink in native output: {path}")
-            if path.is_file() and path.name not in {
-                "InRelease",
-                "Release.gpg",
-                "repomd.xml.asc",
-            }:
-                files[str(path.relative_to(out))] = hashlib.sha256(
-                    path.read_bytes()
-                ).hexdigest()
-    return files

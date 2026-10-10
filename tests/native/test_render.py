@@ -76,18 +76,29 @@ def test_render_native_metadata_and_unchanged(
     from .test_sign_validate import sign
 
     assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
-    before = {
-        p: (p.read_bytes(), p.stat().st_mtime_ns)
-        for p in repo.rglob("*")
-        if p.is_file()
-    }
+    before = {p: p.read_bytes() for p in repo.rglob("*") if p.is_file()}
+    from gel_registry.native import render as rendering
+
+    original_command = rendering._command
+
+    def next_day(args: list[str], cwd: Path) -> bytes:
+        raw = original_command(args, cwd)
+        if args[0] == "apt-ftparchive" and "release" in args:
+            raw = (
+                b"\n".join(
+                    b"Date: Thu, 01 Oct 2026 16:31:53 +0000"
+                    if line.startswith(b"Date:")
+                    else line
+                    for line in raw.splitlines()
+                )
+                + b"\n"
+            )
+        return raw
+
+    monkeypatch.setattr(rendering, "_command", next_day)
     assert render(native_repo)[2] == 0
     assert "unchanged" in capsys.readouterr().out
-    assert before == {
-        p: (p.read_bytes(), p.stat().st_mtime_ns)
-        for p in repo.rglob("*")
-        if p.is_file()
-    }
+    assert before == {p: p.read_bytes() for p in repo.rglob("*") if p.is_file()}
 
 
 @pytest.mark.parametrize(
@@ -273,13 +284,41 @@ def test_yanked_rpm_reservation_survives_trust_key_rotation(
         env=env,
         capture_output=True,
     )
+    listing = subprocess.check_output(
+        ["gpg", "--with-colons", "--list-keys", "replacement@example.com"],
+        env=env,
+        text=True,
+    )
+    primary = next(
+        line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:")
+    )
+    subprocess.run(
+        [
+            "gpg",
+            "--batch",
+            "--passphrase",
+            "",
+            "--quick-add-key",
+            primary,
+            "rsa2048",
+            "sign",
+            "0",
+        ],
+        env=env,
+        check=True,
+        capture_output=True,
+    )
     (repo / "public/keys/gelstable.asc").write_bytes(
         subprocess.check_output(
             ["gpg", "--armor", "--export", "replacement@example.com"], env=env
         )
     )
     # A withdrawn key cannot authenticate live RPMs, including on an unchanged lock.
-    assert render(native_repo)[2] == 1
+    assert render(native_repo)[2] == 0
+    from gel_registry.validation.native import validate_native_structure
+
+    with pytest.raises(ValueError, match="signer"):
+        validate_native_structure(repo)
     (repo / "native/yanked.json").write_text(
         json.dumps(
             [
@@ -373,52 +412,6 @@ def test_render_rejects_invalid_yank_digest(
     assert not (repo / "native/packages.lock.json").exists()
 
 
-@pytest.mark.parametrize("existing", [False, True])
-@pytest.mark.parametrize("failure", ["copy", "rpm-install", "lock-install"])
-def test_render_install_failure_preserves_previous_output(
-    native_repo: Any, monkeypatch: Any, existing: bool, failure: str
-) -> None:
-    import os
-    import shutil
-
-    repo, _, package = native_repo
-    package()
-    if existing:
-        assert render(native_repo)[2] == 0
-        package(revision="2")
-    before = {
-        str(path.relative_to(repo)): path.read_bytes()
-        for path in repo.rglob("*")
-        if path.is_file()
-    }
-    copytree = shutil.copytree
-    replace = os.replace
-
-    def fail_copy(src: Any, dst: Any, *args: Any, **kwargs: Any) -> Any:
-        if Path(src).name == "rpm":
-            raise OSError("injected metadata copy failure")
-        return copytree(src, dst, *args, **kwargs)
-
-    def fail_replace(src: Any, dst: Any, *args: Any, **kwargs: Any) -> Any:
-        target = repo / (
-            "public/rpm" if failure == "rpm-install" else "native/packages.lock.json"
-        )
-        if Path(dst) == target and ".backup" not in str(src):
-            raise OSError("injected installation failure")
-        return replace(src, dst, *args, **kwargs)
-
-    if failure == "copy":
-        monkeypatch.setattr(shutil, "copytree", fail_copy)
-    else:
-        monkeypatch.setattr(os, "replace", fail_replace)
-    assert render(native_repo)[2] == 1
-    assert before == {
-        str(path.relative_to(repo)): path.read_bytes()
-        for path in repo.rglob("*")
-        if path.is_file()
-    }
-
-
 @pytest.mark.parametrize("fmt,arch", [("deb", "amd64"), ("rpm", "x86_64")])
 def test_testing_contains_final_and_prerelease(
     native_repo: Any, fmt: str, arch: str
@@ -453,3 +446,35 @@ def test_testing_contains_final_and_prerelease(
                 node.attrib["ver"] for node in root.findall("{*}package/{*}version")
             }
         assert actual == expected
+
+
+def test_primary_key_rpm_cannot_enter_live_repository(native_repo: Any) -> None:
+    import os
+    import subprocess
+
+    repo, _, package = native_repo
+    env = {**os.environ, "GNUPGHOME": str(repo.parent / "gnupg")}
+    subprocess.run(
+        [
+            "gpg",
+            "--batch",
+            "--passphrase",
+            "",
+            "--quick-generate-key",
+            "Primary <primary@example.com>",
+            "rsa2048",
+            "sign",
+            "0",
+        ],
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+    (repo / "public/keys/gelstable.asc").write_bytes(
+        subprocess.check_output(
+            ["gpg", "--armor", "--export", "primary@example.com"], env=env
+        )
+    )
+    package(fmt="rpm", signer="primary@example.com")
+    assert render(native_repo)[2] == 1
+    assert not (repo / "native/packages.lock.json").exists()

@@ -6,11 +6,13 @@ import gzip
 import hashlib
 import json
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
 
-from ..native.inputs import input_path, load_yanked, metadata_inventory
+from ..native.inputs import input_path, load_yanked
 from ..native.metadata import NAMESPACES, StoredPackage, check_stored
 from ..native.models import CHANNELS, SUPPORTED, LockEntry, format_evr, pool_path
 from ..native.sign import cleartext_matches_release, verify_signature
@@ -81,24 +83,24 @@ def validate_lock(repo: Path) -> list[LockEntry]:
         _safe(public / ("apt" if entry.format == "deb" else "rpm"), entry.path)
     yanked = load_yanked(repo)
     records = set()
+    live_records = set()
     for record in load_releases(repo):
         if record.native:
             for package in record.native.packages:
-                if package.sha256 in yanked:
-                    continue
                 asset = urlsplit(package.url).path.rsplit("/", 1)[1]
-                records.add(
-                    (
-                        asset.rsplit(".", 1)[1],
-                        package.sha256,
-                        package.size,
-                        pool_path(record, package),
-                    )
+                item = (
+                    asset.rsplit(".", 1)[1],
+                    package.sha256,
+                    package.size,
+                    pool_path(record, package),
                 )
+                records.add(item)
+                if package.sha256 not in yanked:
+                    live_records.add(item)
     locked = {(e.format, e.sha256, e.size, e.path) for e in entries}
     if len(entries) != len(locked):
         raise ValueError("duplicate native lock artifact")
-    if locked != records:
+    if not live_records <= locked <= records:
         raise ValueError("native lock does not match committed records")
     return entries
 
@@ -317,28 +319,58 @@ def validate_inventory(public: Path, expected: set[Path]) -> None:
         raise ValueError("unexpected or missing native repository files")
 
 
+def signing_subkeys(key: Path) -> dict[str, bool]:
+    """Return full signing-subkey fingerprints and current revocation status."""
+    with tempfile.TemporaryDirectory(prefix="native-certificate-") as directory:
+        result = subprocess.run(
+            [
+                "gpg",
+                "--batch",
+                "--no-options",
+                "--homedir",
+                directory,
+                "--with-colons",
+                "--import-options",
+                "show-only",
+                "--import",
+                str(key.resolve()),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode:
+            raise ValueError("cannot read native signing certificate")
+    subkeys = {}
+    pending: bool | None = None
+    primary_revoked = False
+    for line in result.stdout.splitlines():
+        fields = line.split(":")
+        if fields[0] == "pub":
+            primary_revoked = fields[1] == "r"
+            pending = None
+        elif fields[0] == "sub":
+            pending = (
+                fields[1] not in {"r", "e", "d"} and not primary_revoked
+                if "s" in fields[11].lower()
+                else None
+            )
+        elif fields[0] == "fpr" and pending is not None:
+            subkeys[fields[9]] = pending
+            pending = None
+    return subkeys
+
+
 def validate_retained(
     repo: Path, entries: list[LockEntry], *, require_generation: bool = False
 ) -> None:
     """Keep reusable metadata and RPM trust attestations sound at publication."""
     path = input_path(repo, "package-metadata.json")
-    state_path = input_path(repo, "render-state.json")
     if not path.exists():
-        if state_path.exists() or require_generation:
+        if entries or require_generation:
             raise ValueError("retained metadata missing; render before signing")
-        return  # Migration from repositories predating retained package records.
+        return
     raw = path.read_bytes()
-    if not state_path.exists():
-        raise ValueError("native render generation missing; render before signing")
-    if state_path.exists():
-        state = json.loads(state_path.read_bytes())
-        if (
-            not isinstance(state, dict)
-            or state.get("packages_sha256") != hashlib.sha256(raw).hexdigest()
-        ):
-            raise ValueError("retained native metadata checksum differs")
-        if state.get("outputs") != metadata_inventory(repo / "public"):
-            raise ValueError("native outputs differ from retained render generation")
     packages = json.loads(raw)
     if not isinstance(packages, dict) or any(
         not re.fullmatch(r"[0-9a-f]{64}", key) for key in packages
@@ -350,6 +382,9 @@ def validate_retained(
     }
     for digest, package in stored.items():
         check_stored(digest, package, live=False)
+    subkeys = signing_subkeys(_safe(repo / "public", "keys/gelstable.asc"))
+    yanked = load_yanked(repo)
+    bad_signers = []
     for entry in entries:
         saved = stored.get(entry.sha256)
         if saved is None or (
@@ -361,14 +396,19 @@ def validate_retained(
         ) != (entry.format, entry.name, entry.version, entry.arch, entry.size):
             raise ValueError("retained package identity does not match native lock")
         check_stored(entry.sha256, saved, live=True)
-        if (
-            entry.format == "rpm"
-            and saved.verified_key
-            != hashlib.sha256(
-                _safe(repo / "public", "keys/gelstable.asc").read_bytes()
-            ).hexdigest()
-        ):
-            raise ValueError("retained RPM trust changed; render before signing")
+        if entry.format == "rpm" and entry.sha256 not in yanked:
+            matches = [
+                valid
+                for fingerprint, valid in subkeys.items()
+                if saved.signer and fingerprint.endswith(saved.signer)
+            ]
+            if matches != [True]:
+                bad_signers.append(entry.sha256)
+    if bad_signers:
+        raise ValueError(
+            "RPM signer is missing, ambiguous or revoked; yank digests: "
+            + ", ".join(sorted(bad_signers))
+        )
 
 
 def validate_native_structure(repo: Path, *, require_generation: bool = True) -> None:
@@ -384,10 +424,10 @@ def validate_native_structure(repo: Path, *, require_generation: bool = True) ->
     validate_retained(repo, entries, require_generation=require_generation)
 
 
-def validate_native_signatures(repo: Path) -> None:
+def validate_native_signatures(repo: Path, *, key: Path | None = None) -> None:
     """Require every signature and verify using the public certificate only."""
     public = repo / "public"
-    key = _safe(public, "keys/gelstable.asc")
+    key = key or _safe(public, "keys/gelstable.asc")
     for channel in CHANNELS:
         apt = public / "apt/dists" / channel
         release = _safe(apt, "Release")
@@ -405,13 +445,50 @@ def validate_native_signatures(repo: Path) -> None:
             )
 
 
-def validate_native(repo: Path) -> None:
-    """Validate structure, then authenticate all metadata."""
+def validate_native(repo: Path, *, base: Path | None = None) -> None:
+    """Authenticate publication, or unchanged base metadata in a key-change PR."""
     validate_native_structure(repo, require_generation=False)
-    validate_native_signatures(repo)
+    try:
+        validate_native_signatures(repo)
+    except (ValueError, OSError):
+        # A certificate/yank PR has no signing secret. Authenticate its exact
+        # unchanged metadata with the already trusted merge-base certificate;
+        # current-certificate RPM signer rules above still apply to live entries.
+        if (
+            base is None
+            or (repo / "public/keys/gelstable.asc").read_bytes()
+            == (base / "public/keys/gelstable.asc").read_bytes()
+        ):
+            raise
+        for relative in ("native/packages.lock.json", "native/package-metadata.json"):
+            current, previous = repo / relative, base / relative
+            if current.exists() != previous.exists() or (
+                current.exists() and current.read_bytes() != previous.read_bytes()
+            ):
+                raise ValueError(
+                    "key-change PR must retain base lock and package records"
+                ) from None
+        for fmt in ("apt", "rpm"):
+
+            def tree(root: Path) -> dict[str, bytes]:
+                result = {}
+                for path in root.rglob("*"):
+                    if path.is_symlink():
+                        raise ValueError("symlink in key-change metadata")
+                    if path.is_file():
+                        result[str(path.relative_to(root))] = path.read_bytes()
+                return result
+
+            if tree(repo / "public" / fmt) != tree(base / "public" / fmt):
+                raise ValueError(
+                    "key-change PR must retain exact base metadata"
+                ) from None
+        validate_native_signatures(
+            repo, key=_safe(base / "public", "keys/gelstable.asc")
+        )
 
 
-def check_native(repo: Path, collector: Collector) -> None:
+def check_native(repo: Path, collector: Collector, base: Path | None = None) -> None:
     """Preserve existing validation before native metadata has been bootstrapped."""
     initialized = any(
         ((repo / path).exists() or (repo / path).is_symlink())
@@ -429,5 +506,7 @@ def check_native(repo: Path, collector: Collector) -> None:
     if not initialized:
         return
     collector.run(
-        "native.integrity", "public/apt public/rpm", lambda: validate_native(repo)
+        "native.integrity",
+        "public/apt public/rpm",
+        lambda: validate_native(repo, base=base),
     )
