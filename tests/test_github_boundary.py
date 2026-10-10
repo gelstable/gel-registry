@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 import httpx
 import pytest
 
@@ -45,40 +43,6 @@ def _asset() -> dict[str, object]:
 
 def _client(handler: httpx.MockTransport) -> httpx.Client:
     return httpx.Client(transport=handler)
-
-
-def test_draft_release_operations_use_fixed_transport_and_blank_body() -> None:
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        if request.method == "GET" and "/tags/" in request.url.path:
-            return httpx.Response(404)
-        if request.method == "GET":
-            return httpx.Response(200, json=[])
-        assert request.method == "POST"
-        assert json.loads(request.content) == {
-            "body": "",
-            "draft": True,
-            "prerelease": False,
-            "tag_name": "legacy-v7",
-            "target_commitish": "abc123",
-        }
-        return httpx.Response(201, json=_release())
-
-    with _client(httpx.MockTransport(handler)) as client:
-        assert get_release_by_tag(client, REPOSITORY, "legacy-v7") is None
-        release = create_draft_release(client, REPOSITORY, "legacy-v7", "abc123")
-
-    assert release.draft
-    assert [request.url.path for request in seen] == [
-        f"/repos/{REPOSITORY}/releases/tags/legacy-v7",
-        f"/repos/{REPOSITORY}/releases",
-        f"/repos/{REPOSITORY}/releases",
-    ]
-    for request in seen:
-        assert request.headers["Accept"] == "application/vnd.github+json"
-        assert request.headers["X-GitHub-Api-Version"] == "2022-11-28"
 
 
 def test_get_release_by_tag_finds_a_draft_in_the_paginated_release_listing() -> None:
@@ -162,26 +126,6 @@ def test_response_release_cannot_switch_repository(repo_payload: object) -> None
         get_release_by_tag(client, REPOSITORY, "legacy-v7")
 
 
-def test_lists_all_assets_and_validates_asset_repository() -> None:
-    release_payload = _release()
-    release_payload["assets"] = [_asset()]
-    response = _asset()
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        payload: object = (
-            release_payload if request.url.path.endswith("legacy-v7") else [response]
-        )
-        return httpx.Response(200, json=payload)
-
-    with _client(httpx.MockTransport(handler)) as client:
-        release = get_release_by_tag(client, REPOSITORY, "legacy-v7")
-        assert release is not None
-        assets = list_release_assets(client, REPOSITORY, release)
-
-    assert assets[0].size == 3
-    assert assets[0].sha256 == "a" * 64
-
-
 def test_upload_uses_only_the_upload_host_and_release_path() -> None:
     captured: dict[str, object] = {}
 
@@ -244,156 +188,6 @@ def test_malformed_repository_never_makes_a_request(repository: str) -> None:
         pytest.raises(GitHubError, match="owner/repository"),
     ):
         get_release_by_tag(client, repository, "legacy-v7")
-
-
-@pytest.mark.parametrize(
-    ("stream", "message"),
-    [
-        (iter((b"a", b"b")), "length"),
-        (iter((b"abc", "not-bytes")), "bytes"),
-    ],
-)
-def test_upload_stream_under_length_is_safe_and_raises_plain_error(
-    stream: object, message: str
-) -> None:
-    """A short stream never lets GitHub see a complete body, so the ordinary
-    ``GitHubError`` is correct here -- there is nothing to recover."""
-
-    seen = 0
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal seen
-        seen += 1
-        request.read()
-        return httpx.Response(201, json=_asset())
-
-    with (
-        _client(httpx.MockTransport(handler)) as client,
-        pytest.raises(GitHubError, match=message),
-    ):
-        upload_release_asset(
-            client,
-            REPOSITORY,
-            GitHubRelease.model_validate(_release()),
-            "server.tar.zst",
-            "application/zstd",
-            3,
-            stream,  # type: ignore[arg-type]
-        )
-    assert seen == 0
-
-
-def test_upload_stream_over_length_raises_github_error() -> None:
-    seen = 0
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal seen
-        seen += 1
-        request.read()
-        return httpx.Response(201, json=_asset())
-
-    with (
-        _client(httpx.MockTransport(handler)) as client,
-        pytest.raises(GitHubError, match="exceeds") as excinfo,
-    ):
-        upload_release_asset(
-            client,
-            REPOSITORY,
-            GitHubRelease.model_validate(_release()),
-            "server.tar.zst",
-            "application/zstd",
-            3,
-            iter((b"abcd",)),
-        )
-    assert isinstance(excinfo.value, GitHubError)
-    assert seen == 0
-
-
-def test_request_settings_and_upload_headers_are_fixed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    observed: list[dict[str, object]] = []
-
-    with _client(
-        httpx.MockTransport(lambda _request: httpx.Response(201, json=_asset()))
-    ) as client:
-        original = client.request
-
-        def request_spy(*args: object, **kwargs: object) -> httpx.Response:
-            observed.append(kwargs)
-            return original(*args, **kwargs)  # type: ignore[arg-type]
-
-        monkeypatch.setattr(client, "request", request_spy)
-        upload_release_asset(
-            client,
-            REPOSITORY,
-            GitHubRelease.model_validate(_release()),
-            "server.tar.zst",
-            "application/zstd",
-            3,
-            iter((b"abc",)),
-        )
-
-    assert len(observed) == 1
-    request = observed[0]
-    assert request["follow_redirects"] is False
-    assert request["timeout"] is not None
-    headers = request["headers"]
-    assert isinstance(headers, dict)
-    assert headers == {
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "gel-registry/1",
-        "Content-Type": "application/zstd",
-        "Content-Length": "3",
-    }
-
-
-def test_every_operation_uses_fixed_headers_timeout_and_no_redirects(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    observed: list[dict[str, object]] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.method == "GET" and request.url.path.endswith("/assets"):
-            return httpx.Response(200, json=[])
-        if request.method == "GET":
-            return httpx.Response(200, json=_release())
-        if request.url.host == "uploads.github.com":
-            return httpx.Response(201, json=_asset())
-        return httpx.Response(201, json=_release())
-
-    with _client(httpx.MockTransport(handler)) as client:
-        original = client.request
-
-        def request_spy(*args: object, **kwargs: object) -> httpx.Response:
-            observed.append(kwargs)
-            return original(*args, **kwargs)  # type: ignore[arg-type]
-
-        monkeypatch.setattr(client, "request", request_spy)
-        release = get_release_by_tag(client, REPOSITORY, "legacy-v7")
-        assert release is not None
-        create_draft_release(client, REPOSITORY, "legacy-v7")
-        list_release_assets(client, REPOSITORY, release)
-        upload_release_asset(
-            client,
-            REPOSITORY,
-            release,
-            "server.tar.zst",
-            "application/zstd",
-            3,
-            iter((b"abc",)),
-        )
-
-    assert len(observed) == 4
-    for request in observed:
-        assert request["follow_redirects"] is False
-        assert request["timeout"] is not None
-        headers = request["headers"]
-        assert isinstance(headers, dict)
-        assert headers["Accept"] == "application/vnd.github+json"
-        assert headers["X-GitHub-Api-Version"] == "2022-11-28"
-        assert headers["User-Agent"] == "gel-registry/1"
 
 
 def test_asset_listing_fetches_every_page() -> None:

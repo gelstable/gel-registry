@@ -1,8 +1,19 @@
 {
+  "native_package_names": {
+    "gelstable/gel": [
+      "^gel-(server-)?[0-9]+$"
+    ],
+    "gelstable/gel-cli": [
+      "^gel-cli$"
+    ],
+    "gelstable/gel-postgis": [
+      "^gel-server-[0-9]+-ext-postgis$"
+    ]
+  },
   "repositories": [
     "gelstable/gel",
     "gelstable/gel-cli",
     "gelstable/gel-postgis"
   ],
-  "schema_version": 1
+  "schema_version": 2
 }

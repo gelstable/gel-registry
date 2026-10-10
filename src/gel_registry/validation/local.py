@@ -18,6 +18,7 @@ from .inputs import (
     check_schemas,
     load_capture,
 )
+from .native import check_native
 from .publication import check_pointer_and_snapshots
 from .report import Collector, ValidationReport
 from .support import CAPTURE_REL, capture_root, display_path
@@ -72,6 +73,7 @@ def validate_local(repo: Path, base: Path | None = None) -> ValidationReport:
     _check_normalization(repository, manifest, collector)
 
     check_render_drift(repository, collector)
+    check_native(repository, collector, base)
     if base is not None:
         check_history(repository, Path(base), collector)
     return collector.report()

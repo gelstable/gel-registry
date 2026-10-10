@@ -1,6 +1,9 @@
 name: Promote registry releases
 
 "on":
+  push:
+    branches: [main]
+    paths: [native/yanked.json, "public/keys/**"]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch: {}
@@ -13,11 +16,11 @@ permissions:
   contents: read
 
 jobs:
-  promote:
+  render:
+    name: Render unsigned candidate
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - name: Check out the default branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -34,12 +37,88 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked
 
+      - name: Install native render tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils createrepo-c rpm gnupg
+
+      - name: Build unsigned candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run .github/scripts/promote.py build --cache "$RUNNER_TEMP/native-packages" --artifact "$RUNNER_TEMP/candidate"
+
+      - name: Upload unsigned candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: registry-candidate
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Sign and publish candidate
+    needs: render
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: registry-signing
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # Commit and lease-push the generated candidate.
+      pull-requests: write # Create or update the promotion PR.
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: "0.11.6"
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Install metadata verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg
+
+      - name: Download unsigned candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: registry-candidate
+          path: ${{ runner.temp }}/candidate/
+
+      - name: Apply generated paths
+        run: |
+          set -euo pipefail
+          uv run .github/scripts/promote.py apply --artifact "$RUNNER_TEMP/candidate"
+
+      - name: Validate unsigned native structure
+        run: uv run gel-registry native validate --unsigned --repo .
+
+      - name: Sign and verify native metadata
+        env:
+          REGISTRY_SIGNING_KEY: ${{ secrets.REGISTRY_SIGNING_KEY }}
+          GELSTABLE_SIGNING_FPR: ${{ secrets.REGISTRY_SIGNING_FPR }}
+        run: |
+          set -euo pipefail
+          GNUPGHOME="$(mktemp -d "$RUNNER_TEMP/registry-signing.XXXXXX")"
+          export GNUPGHOME
+          chmod 700 "$GNUPGHOME"
+          trap 'gpgconf --kill gpg-agent || true; rm -rf "$GNUPGHOME"' EXIT
+          printf '%s' "$REGISTRY_SIGNING_KEY" | gpg --batch --import
+          unset REGISTRY_SIGNING_KEY
+          uv run gel-registry native sign --repo .
+
       - name: Authenticate Git for the candidate branch update
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh auth setup-git
 
-      - name: Rebuild the rolling promotion candidate
+      - name: Publish the signed rolling candidate
         env:
           GH_TOKEN: ${{ github.token }}
-        run: uv run .github/scripts/promote.py
+        run: uv run .github/scripts/promote.py publish --artifact "$RUNNER_TEMP/candidate"

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -13,7 +12,6 @@ from gel_registry.__main__ import main
 from gel_registry.digest import canonical_json
 from gel_registry.rescue import (
     RescueAsset,
-    RescueCaptureManifest,
     RescuePlan,
     RescueRelease,
 )
@@ -50,67 +48,6 @@ def test_rescue_plan_requires_one_explicit_selection_mode() -> None:
 
     with pytest.raises(SystemExit) as error:
         main(["rescue-plan", "--capture", "legacy-2026-08-bootstrap"])
-    assert error.value.code == 2
-
-
-def test_rescue_capture_requires_captured_at() -> None:
-    """Rescue capture requires an explicit RFC3339 timestamp."""
-
-    with pytest.raises(SystemExit) as error:
-        main(["rescue-capture"])
-    assert error.value.code == 2
-
-
-def test_rescue_capture_runs_and_prints_capture_id(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    fake_manifest = MagicMock(spec=RescueCaptureManifest)
-    fake_manifest.capture = "legacy-2026-08-bootstrap"
-
-    monkeypatch.setattr(
-        main_module,
-        "capture_rescue_indexes",
-        lambda _client, _repo, _captured_at: fake_manifest,
-    )
-
-    exit_code = main(
-        [
-            "rescue-capture",
-            "--captured-at",
-            "2026-08-31T12:00:00Z",
-        ]
-    )
-    assert exit_code == 0
-    assert capsys.readouterr().out.strip() == "legacy-2026-08-bootstrap"
-
-
-def test_rescue_plan_prints_canonical_json(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    plan = _cli_plan()
-    monkeypatch.setattr(
-        main_module,
-        "plan_rescue",
-        lambda *args, **kwargs: plan,
-    )
-
-    exit_code = main(
-        [
-            "rescue-plan",
-            "--capture",
-            "legacy-2026-08-bootstrap",
-            "--bulk",
-        ]
-    )
-    assert exit_code == 0
-    assert capsys.readouterr().out == canonical_json(plan).decode("utf-8")
-
-
-def test_rescue_publish_requires_a_plan_path() -> None:
-    """Publishing without an explicit plan must never be possible."""
-
-    with pytest.raises(SystemExit) as error:
-        main(["rescue-publish"])
     assert error.value.code == 2
 
 

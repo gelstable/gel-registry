@@ -37,6 +37,13 @@
             pkgs.jq
             pkgs.curl
             pkgs.gh
+            pkgs.nfpm
+            pkgs.gnupg
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            pkgs.apt
+            pkgs.rpm
+            pkgs.createrepo_c
           ];
 
           # Write to stderr. `nix develop --command` is used in CI and in

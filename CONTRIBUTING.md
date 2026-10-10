@@ -62,9 +62,12 @@ publication or a rollback, and a maintainer operation.
 `public/registry.json` and `public/v1/snapshots.json` are generated from the
 pointer. Regenerate them rather than hand-editing them.
 
-Changes that add a Vercel Function, a rewrite, a redirect, a build command, or
-any build-time network fetch will not be accepted. These are load-bearing for
-the registry's integrity model, not stylistic preferences.
+There are no redirects except the generated package-pool rule. It sends APT
+and RPM package downloads to release assets in the repository allowlist from
+`sources/github.json`; signed metadata supplies the package hash clients verify.
+The existing generated legacy index rewrites resolve within the static tree.
+Changes that add a Vercel Function, other rewrites or redirects, a build command,
+or any build-time network fetch will not be accepted.
 
 ## Package publishing & registry content
 

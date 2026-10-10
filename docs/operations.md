@@ -300,3 +300,111 @@ Registry JSON responds normally, but binary downloads (`installref`) fail.
 3. Verify artifact hashes against recorded digests after recovery.
 
 If both fail, track both incidents independently. Keep last known good Git commit and snapshot ID intact.
+
+## Native package operations
+
+```text
+product release → discover → fetch and inspect new digests
+                           → compose indexes from retained records
+                           → sign metadata → promotion PR → merge → Vercel
+                                                                  → apt / dnf
+stable server or CLI change → Docker reconciler → build, test, publish
+```
+
+### New CLI release
+
+- [ ] Run the CLI release workflow; it builds, signs and publishes both formats.
+- [ ] Review and merge the registry promotion PR as below.
+- [ ] Check the Docker reconciler; it picks up the CLI within the hour.
+
+### Package an existing server or PostGIS release
+
+- [ ] Dispatch the product's `native-packages.yml` with `source_tag` (for example
+      `v7.1` or `legacy-gel-server-7-ext-postgis`), leaving `repack` unchecked.
+- [ ] Check the build and install tests and the published `pkg-…` release.
+- [ ] Review and merge the registry promotion PR.
+- [ ] Check Docker's next hourly reconcile for a server release.
+
+### New server or PostGIS version
+
+- [ ] Use the product release pipeline, which calls the reusable native workflow.
+      Until that pipeline is available, package an existing release instead.
+- [ ] Review and merge the registry promotion PR.
+- [ ] Confirm the production smoke run and Docker reconcile succeed.
+
+### Prerelease
+
+- [ ] Follow the normal release steps; the package's `~` version selects testing.
+- [ ] Check it appears only in testing; testing also includes stable packages.
+- [ ] Install using the testing source from [client setup](native-packages.md).
+
+### Repack
+
+- [ ] Dispatch the server or PostGIS packaging workflow with the same `source_tag`
+      and `repack` checked. It computes the next unused published revision.
+- [ ] For the CLI, cut a new patch release instead; its package revision stays 1.
+- [ ] Check build/install tests and review and merge the promotion PR.
+- [ ] Confirm clients see the new revision; never replace a published asset.
+
+### Review the promotion PR
+
+- [ ] Check the declaring repository/tag and package URL, digest and size.
+- [ ] Check names belong to the publisher and native versions have epoch 1.
+- [ ] Review new `native/package-metadata.json` records and RPM signers.
+- [ ] Check the lock's channel comes from the version and testing includes stable.
+- [ ] Confirm validation and signed fixture client tests pass.
+- [ ] Merge, check the Vercel deployment, then run `native-smoke` if needed.
+
+### Bad release: yank
+
+- [ ] Find the package SHA-256 values in `native/packages.lock.json`.
+- [ ] Open a PR adding `{ "sha256": "<digest>", "reason": "<reason>" }` for each
+      asset to the array in `native/yanked.json`; merge it after validation.
+- [ ] The push triggers promotion. Review and merge the PR removing those digests
+      from indexes and re-signing the changed metadata.
+- [ ] Publish a fixed version or repack, and merge its promotion PR.
+- [ ] Tell affected users: clients do not automatically downgrade or uninstall.
+
+### Routine key rotation
+
+- [ ] Follow [signing-key rotation and custody](signing-keys.md) to add a new
+      signing subkey, retaining the old valid subkey in the certificate.
+- [ ] Run `scripts/set-signing-secrets.sh BUNDLE_DIR` from the new custody bundle.
+- [ ] Open and merge a PR replacing the committed certificate and fingerprint.
+- [ ] Review and merge the triggered promotion PR; current signatures stay valid.
+- [ ] Confirm new product packages use the new subkey.
+
+### Key compromise
+
+- [ ] Follow [signing-key custody and recovery](signing-keys.md): revoke the
+      compromised signing subkey and add a replacement.
+- [ ] Run `scripts/set-signing-secrets.sh BUNDLE_DIR` with the replacement bundle.
+- [ ] Open the certificate PR; validation names the affected RPM digests.
+- [ ] Add those digests to `native/yanked.json` in the same PR.
+- [ ] Merge the certificate/yank PR, then the promotion PR that removes the RPMs
+      and replaces revoked metadata signatures.
+- [ ] Repack affected versions and publish an advisory asking users to fetch
+      the updated public certificate and verify its primary fingerprint.
+
+### Scheduled job failure
+
+- [ ] Follow the run link in the job's issue and fix the reported cause.
+- [ ] Let the next scheduled run retry; rerun manual dispatches yourself.
+- [ ] Check the issue closes on the next successful scheduled run.
+
+### Nobody available
+
+- [ ] Leave releases in the promotion PR until someone can review them.
+- [ ] No key or metadata expires; installed clients keep using signed indexes.
+- [ ] Docker retries failed scheduled reconciles automatically.
+
+### Acceptance and recovery
+
+- [ ] Run `native-smoke` for deployed supported systems and both architectures.
+- [ ] Use `tests/clients/migrate.sh` for the legacy-source migration check.
+- [ ] If retained package records are lost, restore them from Git; deleting a
+      record makes the next render download that package again.
+- [ ] Restore failed local renders with Git, preserving intended source edits.
+
+Publisher interfaces: [shared actions](publishing.md). Local fixture setup:
+[native development](native-development.md). Secrets: [inventory](secrets.md).

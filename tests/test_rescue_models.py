@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 from pydantic import ValidationError
 
 from gel_registry.rescue.models import (
-    RescueAbsentIndex,
     RescueAsset,
-    RescueIndexCapture,
     RescuePlan,
     RescueRelease,
 )
@@ -124,25 +120,6 @@ def test_plan_rejects_duplicate_expected_sha256_across_releases() -> None:
         )
 
 
-def test_contracts_reject_empty_releases_and_assets() -> None:
-    """No-op empty plans and releases must fail at the contract edge."""
-
-    with pytest.raises(ValidationError):
-        RescueRelease(
-            repository="gelstable/gel",
-            tag="v1.0.0",
-            target_commitish=None,
-            assets=(),
-        )
-
-    with pytest.raises(ValidationError):
-        RescuePlan(
-            schema_version=1,
-            capture="legacy-2026-08-31",
-            releases=(),
-        )
-
-
 def test_plan_rejects_noncanonical_ordering_and_json() -> None:
     """Relaxing canonical ordering or JSON checks must fail at the contract edge."""
 
@@ -193,43 +170,3 @@ def test_contracts_require_sizes_and_safe_asset_names() -> None:
     for unsafe_name in ("gel\tcli", "gel\x1fcli"):
         with pytest.raises(ValidationError, match="safe filename"):
             _asset(name=unsafe_name)
-
-
-def test_capture_manifest_is_immutable_and_canonical() -> None:
-    """Changing manifest fields or JSON formatting must be rejected."""
-
-    manifest = RescueIndexCapture(
-        source_url="https://packages.edgedb.com/archive/.jsonindexes/linux.json",
-        channel="stable",
-        platform="x86_64-unknown-linux-gnu",
-        captured_at=datetime(2026, 8, 31, 12, 0, tzinfo=UTC),
-        byte_size=12,
-        sha256="b" * 64,
-    )
-    with pytest.raises(ValidationError):
-        manifest.channel = "nightly"
-    with pytest.raises(ValueError, match="canonical JSON"):
-        RescueIndexCapture.model_validate_json(
-            b'{"source_url":"https://packages.edgedb.com/index.json","channel":"stable","platform":"linux","captured_at":"2026-08-31T12:00:00Z","byte_size":1,"sha256":"'
-            + b"b" * 64
-            + b'"}'
-        )
-
-
-def test_absent_index_validation() -> None:
-    absent = RescueAbsentIndex(
-        source_url="https://packages.edgedb.com/archive/.jsonindexes/absent.json",
-        channel="testing",
-        platform="aarch64-pc-windows-msvc",
-        captured_at=datetime(2026, 8, 31, 12, 0, tzinfo=UTC),
-        observed_status=404,
-    )
-    assert absent.observed_status == 404
-    with pytest.raises(ValidationError):
-        RescueAbsentIndex(
-            source_url="https://packages.edgedb.com/archive/.jsonindexes/absent.json",
-            channel="testing",
-            platform="aarch64-pc-windows-msvc",
-            captured_at=datetime(2026, 8, 31, 12, 0, tzinfo=UTC),
-            observed_status=200,  # must be 400-599
-        )

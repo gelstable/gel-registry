@@ -1,0 +1,17 @@
+name: Publish native release
+description: Validate, draft, upload, check API digests, and publish a native release.
+inputs:
+  directory:
+    description: Directory containing signed final packages.
+    required: true
+  tag:
+    description: Computed native release tag.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        INPUT_DIRECTORY: ${{ inputs.directory }}
+        INPUT_TAG: ${{ inputs.tag }}
+      run: python3 "$GITHUB_ACTION_PATH/publish.py"

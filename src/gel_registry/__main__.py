@@ -13,9 +13,9 @@ from typing import cast
 
 import httpx
 
-from . import candidate, capture, normalize, publication, render, validation
+from . import candidate, capture, native, normalize, publication, render, validation
 from .constants import CAPTURE_ID
-from .contracts import CaptureManifest
+from .contracts import CaptureManifest, ReleaseManifest
 from .digest import canonical_json
 from .github import create_github_client
 from .rescue import load_plan, publish_plan
@@ -206,9 +206,53 @@ def _run_validate(args: argparse.Namespace) -> int:
     return _print_report(report)
 
 
+def _run_manifest_check(args: argparse.Namespace) -> int:
+    ReleaseManifest.model_validate_json(args.file.read_bytes())
+    print("ok")
+    return 0
+
+
+def _run_native_render(args: argparse.Namespace) -> int:
+    changed = native.render_native(
+        Path(args.repo), Path(args.cache), Path(args.out), args.base_url
+    )
+    print("rendered" if changed else "unchanged")
+    return 0
+
+
+def _run_native_sign(args: argparse.Namespace) -> int:
+    native.sign_native(Path(args.repo))
+    print("signed")
+    return 0
+
+
+def _run_native_validate(args: argparse.Namespace) -> int:
+    from .validation.native import validate_native, validate_native_structure
+
+    (validate_native_structure if args.unsigned else validate_native)(Path(args.repo))
+    print("ok")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gel-registry")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    native_parser = commands.add_parser("native", help="native package repositories")
+    native_commands = native_parser.add_subparsers(required=True)
+    native_render = native_commands.add_parser("render")
+    _add_repo(native_render)
+    native_render.add_argument("--cache", required=True, type=Path)
+    native_render.add_argument("--out", required=True, type=Path)
+    native_render.add_argument("--base-url", default="https://registry.gelstable.com")
+    native_render.set_defaults(handler=_run_native_render)
+    native_sign = native_commands.add_parser("sign")
+    _add_repo(native_sign)
+    native_sign.set_defaults(handler=_run_native_sign)
+    native_validate = native_commands.add_parser("validate")
+    _add_repo(native_validate)
+    native_validate.add_argument("--unsigned", action="store_true")
+    native_validate.set_defaults(handler=_run_native_validate)
 
     capture_parser = commands.add_parser("capture", help="capture legacy indexes")
     _add_repo(capture_parser)
@@ -306,6 +350,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_repo(candidate_parser)
     candidate_parser.set_defaults(handler=_run_build_candidate)
+
+    manifest_parser = commands.add_parser("manifest", help="publisher manifest tools")
+    manifest_commands = manifest_parser.add_subparsers(
+        dest="manifest_command", required=True
+    )
+    manifest_check = manifest_commands.add_parser(
+        "check", help="validate an unpublished release manifest"
+    )
+    manifest_check.add_argument("file", type=Path)
+    manifest_check.set_defaults(handler=_run_manifest_check)
 
     validate_parser = commands.add_parser(
         "validate", help="run deterministic local validation"

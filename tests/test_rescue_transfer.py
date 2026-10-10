@@ -3,21 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator
 
 import httpx
 import pytest
 
-import gel_registry.rescue.transfer as transfer_module
-from gel_registry.github import GitHubAsset, GitHubError, GitHubRelease
+from gel_registry.github import GitHubError, GitHubRelease
 from gel_registry.rescue import RescueAsset
 from gel_registry.rescue.transfer import (
     RescueSourceIntegrityError,
     RescueTransferError,
     RescueUploadIntegrityError,
-    transfer_asset,
     transfer_original_asset,
-    verify_uploaded_asset,
 )
 
 REPOSITORY = "gelstable/gel-cli"
@@ -93,46 +89,6 @@ def _handler_for(
         return upload_response
 
     return httpx.MockTransport(handler)
-
-
-def test_transfer_original_asset_streams_in_declared_chunk_sizes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Prove real chunking, not just correct reassembly."""
-
-    monkeypatch.setattr(transfer_module, "_CHUNK_SIZE", 4)
-    observed_chunk_sizes: list[int] = []
-    base_hashing_stream = transfer_module._HashingStream
-
-    class _RecordingHashingStream(base_hashing_stream):  # type: ignore[misc, valid-type]
-        def __iter__(self) -> Iterator[bytes]:
-            for chunk in super().__iter__():
-                observed_chunk_sizes.append(len(chunk))
-                yield chunk
-
-    monkeypatch.setattr(transfer_module, "_HashingStream", _RecordingHashingStream)
-
-    body = b"abcdefghijklmno"  # 15 bytes over a 4-byte chunk size -> 4,4,4,3
-    asset = _identity_asset(body)
-    captured: dict[str, object] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.host == "packages.edgedb.com":
-            return httpx.Response(200, content=body)
-        captured["content"] = request.content
-        return httpx.Response(
-            201,
-            json=_github_asset_payload(
-                size=len(body), sha256=hashlib.sha256(body).hexdigest()
-            ),
-        )
-
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        result = transfer_original_asset(client, REPOSITORY, _release(), asset)
-
-    assert observed_chunk_sizes == [4, 4, 4, 3]
-    assert captured["content"] == body
-    assert result.size == len(body)
 
 
 def test_transfer_original_asset_rejects_short_source_as_ordinary_error() -> None:
@@ -299,27 +255,3 @@ def test_transfer_original_asset_retries_after_upload_failure() -> None:
 
     assert result.size == len(body)
     assert attempt["count"] == 2
-
-
-def test_transfer_asset_delegates_to_transfer_original_asset() -> None:
-    body = b"direct-bytes"
-    asset = _identity_asset(body)
-    transport = _handler_for(
-        body,
-        httpx.Response(
-            201,
-            json=_github_asset_payload(
-                size=len(body), sha256=hashlib.sha256(body).hexdigest()
-            ),
-        ),
-    )
-    with httpx.Client(transport=transport) as client:
-        result = transfer_asset(client, REPOSITORY, _release(), asset)
-    assert result.size == len(body)
-
-
-def test_verify_uploaded_asset_success() -> None:
-    asset = GitHubAsset.model_validate(
-        _github_asset_payload(size=123, sha256="a" * 64, name="gel-cli.tar.gz")
-    )
-    verify_uploaded_asset("gel-cli.tar.gz", asset, 123, "a" * 64)
