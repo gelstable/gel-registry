@@ -20,8 +20,11 @@ from .test_sign_validate import sign
 pytestmark = pytest.mark.native_tools
 
 
+@pytest.mark.parametrize(
+    "include_packages", [False, True], ids=["empty-bootstrap", "packages"]
+)
 def test_unsigned_artifact_sign_and_publish_without_package_cache(
-    native_repo: Any, monkeypatch: Any, tmp_path: Path
+    native_repo: Any, monkeypatch: Any, tmp_path: Path, include_packages: bool
 ) -> None:
     script = Path(__file__).parents[2] / ".github/scripts/promote.py"
     spec = importlib.util.spec_from_file_location("promotion_boundary", script)
@@ -58,8 +61,9 @@ def test_unsigned_artifact_sign_and_publish_without_package_cache(
         if command[:2] == ["git", "fetch"] or command[:2] == ["git", "switch"]:
             return ""
         if command[:2] == ["gel-registry", "build-candidate"]:
-            make_package("gel-cli")
-            make_package("gel-server-7", "rpm")
+            if include_packages:
+                make_package("gel-cli")
+                make_package("gel-server-7", "rpm")
             publish_registry(repo)
             return '{"rejected": []}'
         return run(command)

@@ -172,7 +172,15 @@ def test_publication_checks_uploaded_bytes_and_cleans_own_draft(
     def gh(*args: str) -> str:
         calls.append(args)
         if args[0] == "api" and "--paginate" in args:
-            return "[[]]"
+            return (
+                json.dumps([[{"id": 42, "tag_name": "v8.0", "draft": True}]])
+                if any(call[:2] == ("release", "create") for call in calls)
+                else "[[]]"
+            )
+        if args[0] == "api" and "/releases/tags/" in args[1]:
+            # GitHub exposes drafts through the release listing/ID, not by tag.
+            raise subprocess.CalledProcessError(1, args)
+
         if args[0] == "api":
             assets = [
                 {
@@ -190,6 +198,8 @@ def test_publication_checks_uploaded_bytes_and_cleans_own_draft(
                     "assets": assets,
                 }
             )
+        if args[:2] == ("release", "view"):
+            return json.dumps({"databaseId": 42})
         if args[:2] == ("release", "edit") and outcome == "publish-response-lost":
             raise subprocess.CalledProcessError(1, args)
         return ""

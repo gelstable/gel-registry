@@ -8,7 +8,6 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from urllib.parse import quote
 
 
 def gh(*args: str) -> str:
@@ -66,7 +65,7 @@ def publish(directory: Path, repository: str, tag: str) -> None:
             else "~" in version
         )
     flags = ["--prerelease"] if prerelease else []
-    created = False
+    release_api: str | None = None
     try:
         gh(
             "release",
@@ -81,7 +80,12 @@ def publish(directory: Path, repository: str, tag: str) -> None:
             os.environ["GITHUB_SHA"],
             *flags,
         )
-        created = True
+        # GitHub's tag endpoint omits drafts. The CLI resolves draft tags and
+        # returns their API identity, which remains valid after publication.
+        release_id = json.loads(
+            gh("release", "view", tag, "--repo", repository, "--json", "databaseId")
+        )["databaseId"]
+        release_api = f"repos/{repository}/releases/{release_id}"
         paths = [directory / p["url"].rsplit("/", 1)[1] for p in native["packages"]] + [
             manifest
         ]
@@ -93,9 +97,7 @@ def publish(directory: Path, repository: str, tag: str) -> None:
             repository,
             *(str(path) for path in paths),
         )
-        release = json.loads(
-            gh("api", f"repos/{repository}/releases/tags/{quote(tag, safe='')}")
-        )
+        release = json.loads(gh("api", release_api))
         assets = {asset["name"]: asset for asset in release["assets"]}
         if set(assets) != {path.name for path in paths}:
             raise ValueError("uploaded asset inventory differs")
@@ -109,12 +111,10 @@ def publish(directory: Path, repository: str, tag: str) -> None:
                 raise ValueError(f"uploaded digest or size differs: {path.name}")
         gh("release", "edit", tag, "--repo", repository, "--draft=false")
     except BaseException:
-        if created:
+        if release_api is not None:
             # A lost publication response may mean the release is already live.
             # Never delete published assets during draft cleanup.
-            current = json.loads(
-                gh("api", f"repos/{repository}/releases/tags/{quote(tag, safe='')}")
-            )
+            current = json.loads(gh("api", release_api))
             if current.get("draft") is True:
                 gh("release", "delete", tag, "--repo", repository, "--yes")
         raise

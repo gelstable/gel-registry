@@ -189,7 +189,7 @@ def publish(result: dict[str, Any], *, run: Runner = _run) -> None:
     if not changed:
         _delete_candidate_and_close_pr(run, observed_oid)
         return
-    run(["git", "add", "--", *ALLOWED_PREFIXES, *sorted(ALLOWED_EXACT)])
+    run(["git", "add", "--", *changed])
     staged = run(["git", "diff", "--name-only", "--cached"]).splitlines()
     _validate_paths(staged, description="staged candidate")
     run(
