@@ -232,7 +232,6 @@ def test_yank_preserves_identity_reservation(
     assert json.loads((repo / "native/packages.lock.json").read_bytes()) == []
     # A duplicate record for the exact bytes remains accepted in either channel.
     duplicate = json.loads(json.dumps(record))
-    duplicate["native"]["channel"] = channel
     (repo / "releases/gelstable/gel/duplicate.json").write_text(json.dumps(duplicate))
     assert render(native_repo)[2] == 0
     package(fmt=fmt, channel=channel, payload="replacement")
@@ -245,7 +244,7 @@ def test_yank_preserves_identity_reservation(
     lock = json.loads((repo / "native/packages.lock.json").read_bytes())
     assert len(lock) == 1
     assert lock[0]["version"] == "1:7.1-2"
-    assert lock[0]["channel"] == channel
+    assert lock[0]["channel"] == "stable"
 
 
 def test_yanked_rpm_reservation_survives_trust_key_rotation(
@@ -418,3 +417,39 @@ def test_render_install_failure_preserves_previous_output(
         for path in repo.rglob("*")
         if path.is_file()
     }
+
+
+@pytest.mark.parametrize("fmt,arch", [("deb", "amd64"), ("rpm", "x86_64")])
+def test_testing_contains_final_and_prerelease(
+    native_repo: Any, fmt: str, arch: str
+) -> None:
+    repo, _, package = native_repo
+    package(fmt=fmt, arch=arch, version="7.2~rc.1")
+    package(fmt=fmt, arch=arch, version="7.2")
+    assert render(native_repo)[2] == 0
+    lock = json.loads((repo / "native/packages.lock.json").read_bytes())
+    assert {(item["version"], item["channel"]) for item in lock} == {
+        ("1:7.2~rc.1-1", "testing"),
+        ("1:7.2-1", "stable"),
+    }
+    for channel, expected in [("stable", {"7.2"}), ("testing", {"7.2", "7.2~rc.1"})]:
+        if fmt == "deb":
+            raw = (
+                repo / f"public/apt/dists/{channel}/main/binary-{arch}/Packages"
+            ).read_text()
+            actual = {
+                line.split(": ", 1)[1].removeprefix("1:").removesuffix("-1")
+                for line in raw.splitlines()
+                if line.startswith("Version:")
+            }
+        else:
+            path = next(
+                (repo / f"public/rpm/{channel}/{arch}/repodata").glob(
+                    "*-primary.xml.gz"
+                )
+            )
+            root = ElementTree.fromstring(gzip.decompress(path.read_bytes()))
+            actual = {
+                node.attrib["ver"] for node in root.findall("{*}package/{*}version")
+            }
+        assert actual == expected

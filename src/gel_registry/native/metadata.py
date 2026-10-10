@@ -192,7 +192,9 @@ def compose_metadata(
             selected = [
                 e
                 for e in entries
-                if (e.channel, e.format, e.arch) == (channel, "deb", arch)
+                if e.format == "deb"
+                and e.arch == arch
+                and (channel == "testing" or e.channel == channel)
             ]
             raw = "".join(
                 _deb_stanza(stored[e.sha256], e) + "\n\n" for e in selected
@@ -212,7 +214,9 @@ def compose_metadata(
             selected = [
                 e
                 for e in entries
-                if (e.channel, e.format, e.arch) == (channel, "rpm", arch)
+                if e.format == "rpm"
+                and e.arch == arch
+                and (channel == "testing" or e.channel == channel)
             ]
             repomd = ET.Element(f"{{{REPOMD_NS}}}repomd")
             ET.SubElement(repomd, f"{{{REPOMD_NS}}}revision").text = hashlib.sha256(

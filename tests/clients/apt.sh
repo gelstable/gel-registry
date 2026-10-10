@@ -12,7 +12,7 @@ configure() {
   cat > "$source_file" <<SOURCE
 Types: deb
 URIs: $base/$1/apt
-Suites: stable
+Suites: ${2:-stable}
 Components: main
 Signed-By: /etc/apt/keyrings/fixture.asc
 SOURCE
@@ -38,3 +38,13 @@ for variant in tampered unsigned; do
   grep -Ei 'Hash Sum mismatch|File has unexpected size|not signed' /tmp/rejection.log
   echo "APT rejected $variant repository"
 done
+
+configure prerelease testing
+update
+apt-get install -y gel-7
+test "$(dpkg-query -W -f='${Version}' gel-7)" = '1:7.2~rc.1-1'
+configure final testing
+update
+apt-get install -y gel-7
+test "$(dpkg-query -W -f='${Version}' gel-7)" = '1:7.2-1'
+echo 'APT testing-only prerelease to final upgrade passed'

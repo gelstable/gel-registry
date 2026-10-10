@@ -64,6 +64,20 @@ def build(output: Path, base_url: str) -> None:
         for pattern in ("InRelease", "Release.gpg", "repomd.xml.asc"):
             for path in (output / "unsigned").rglob(pattern):
                 path.unlink()
+        # Separate snapshots prove a testing-only client upgrades to the final.
+        for stage, version in (("prerelease", "7.2~rc.1"), ("final", "7.2")):
+            for fmt in ("deb", "rpm"):
+                package("gel-7", fmt, arch=arch, version=version)
+            for pool in (public / "apt/pool", public / "rpm/pool"):
+                if pool.exists():
+                    shutil.rmtree(pool)
+            render_native(repo, cache, public, base_url + "/" + stage)
+            sign_native(repo)
+            for item in json.loads((repo / "native/packages.lock.json").read_text()):
+                path = public / item["format"].replace("deb", "apt") / item["path"]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(cache / item["sha256"], path)
+            shutil.copytree(public, output / stage)
     print(f"Signed fixtures ready: {output}")
 
 

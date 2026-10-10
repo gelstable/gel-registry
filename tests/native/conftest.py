@@ -85,6 +85,7 @@ def native_repo(tmp_path: Path) -> tuple[Path, Path, Callable[..., dict[str, obj
         channel: str = "stable",
         payload: str = "hello",
         revision: str = "1",
+        version: str = "7.1",
         signer: str = "fixture@example.com",
     ) -> dict[str, object]:
         nonlocal count
@@ -100,7 +101,7 @@ def native_repo(tmp_path: Path) -> tuple[Path, Path, Callable[..., dict[str, obj
                     "platform": "linux",
                     "version_schema": "none",
                     "epoch": "1",
-                    "version": "7.1",
+                    "version": version,
                     "release": revision,
                     "maintainer": "Fixture <fixture@example.com>",
                     "description": "Native test package",
@@ -152,7 +153,6 @@ def native_repo(tmp_path: Path) -> tuple[Path, Path, Callable[..., dict[str, obj
             "replacements": [],
             "indexes": [],
             "native": {
-                "channel": channel,
                 "packages": [
                     {
                         "url": f"https://github.com/{repository}/releases/download/pkg-{count}/{asset}",

@@ -106,9 +106,8 @@ sudo apt-get install -t testing gel-7 gel-server-7-ext-postgis
 ```
 
 With both suites enabled, APT may choose a newer testing version during ordinary
-upgrades. Use testing on a disposable system or configure APT pinning if you
-need package-specific selection. To stop receiving testing updates, remove
-`/etc/apt/sources.list.d/gelstable-testing.sources` and run `apt-get update`.
+upgrades. Use the testing source instead of stable: testing includes every stable
+package as well as prereleases. Enabling both sources is harmless.
 
 DNF testing is disabled by default and enabled explicitly for a transaction:
 

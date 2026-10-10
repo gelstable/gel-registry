@@ -138,16 +138,8 @@
     },
     "NativeSection": {
       "additionalProperties": false,
-      "description": "Native assets destined for one distribution channel.",
+      "description": "Native assets whose channels are derived from package versions.",
       "properties": {
-        "channel": {
-          "enum": [
-            "stable",
-            "testing"
-          ],
-          "title": "Channel",
-          "type": "string"
-        },
         "packages": {
           "items": {
             "$ref": "#/$defs/NativePackage"
@@ -157,7 +149,6 @@
         }
       },
       "required": [
-        "channel",
         "packages"
       ],
       "title": "NativeSection",

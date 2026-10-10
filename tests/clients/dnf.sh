@@ -9,7 +9,7 @@ configure() {
   cat > /etc/yum.repos.d/fixture.repo <<SOURCE
 [fixture]
 name=Signed fixture
-baseurl=$base/$1/rpm/stable/\$basearch
+baseurl=$base/$1/rpm/${2:-stable}/\$basearch
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
@@ -34,3 +34,11 @@ for variant in tampered unsigned; do
   grep -Ei 'checksum|signature|repomd.xml.asc' /tmp/rejection.log
   echo "DNF rejected $variant repository"
 done
+
+configure prerelease testing
+dnf -y --disablerepo='*' --enablerepo=fixture upgrade gel-7
+test "$(rpm -q --qf '%{EPOCHNUM}:%{VERSION}-%{RELEASE}' gel-7)" = '1:7.2~rc.1-1'
+configure final testing
+dnf -y --disablerepo='*' --enablerepo=fixture upgrade gel-7
+test "$(rpm -q --qf '%{EPOCHNUM}:%{VERSION}-%{RELEASE}' gel-7)" = '1:7.2-1'
+echo 'DNF testing-only prerelease to final upgrade passed'

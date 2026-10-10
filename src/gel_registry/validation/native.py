@@ -89,14 +89,13 @@ def validate_lock(repo: Path) -> list[LockEntry]:
                 asset = urlsplit(package.url).path.rsplit("/", 1)[1]
                 records.add(
                     (
-                        record.native.channel,
                         asset.rsplit(".", 1)[1],
                         package.sha256,
                         package.size,
                         pool_path(record, package),
                     )
                 )
-    locked = {(e.channel, e.format, e.sha256, e.size, e.path) for e in entries}
+    locked = {(e.format, e.sha256, e.size, e.path) for e in entries}
     if len(entries) != len(locked):
         raise ValueError("duplicate native lock artifact")
     if locked != records:
@@ -147,7 +146,9 @@ def validate_apt(public: Path, channel: str, entries: list[LockEntry]) -> set[Pa
         wanted = {
             (e.sha256, e.path, e.size, e.name, e.version, e.arch)
             for e in entries
-            if (e.channel, e.format, e.arch) == (channel, "deb", arch)
+            if e.format == "deb"
+            and e.arch == arch
+            and (channel == "testing" or e.channel == channel)
         }
         if _packages(path.read_bytes()) != wanted:
             raise ValueError("Packages does not match native lock")
@@ -261,14 +262,18 @@ def validate_rpm(
     wanted = {
         (e.sha256, e.path, e.size, e.name, e.version, e.arch)
         for e in entries
-        if (e.channel, e.format, e.arch) == (channel, "rpm", arch)
+        if e.format == "rpm"
+        and e.arch == arch
+        and (channel == "testing" or e.channel == channel)
     }
     if packages != wanted:
         raise ValueError("primary metadata does not match native lock")
     auxiliary_wanted = {
         (e.sha256, e.name, e.version, e.arch)
         for e in entries
-        if (e.channel, e.format, e.arch) == (channel, "rpm", arch)
+        if e.format == "rpm"
+        and e.arch == arch
+        and (channel == "testing" or e.channel == channel)
     }
     for kind in ("filelists", "other"):
         auxiliary = set()

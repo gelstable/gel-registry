@@ -24,7 +24,7 @@ from .metadata import (
     compose_metadata,
     extract_metadata,
 )
-from .models import LockEntry, pool_path
+from .models import LockEntry, pool_path, version_channel
 
 # Bump when extraction or aggregate formatting changes.
 RENDER_VERSION = 2
@@ -166,7 +166,7 @@ def render_native(
                 entry = LockEntry.model_validate(
                     {
                         **saved.identity.model_dump(),
-                        "channel": record.native.channel,
+                        "channel": version_channel(saved.identity.version),
                         "sha256": digest,
                         "size": package.size,
                         "path": pool_path(record, package),

@@ -165,7 +165,8 @@ Schema version `2` retains `replacements` and `indexes` and adds an optional
 `native.packages` list is required. Version 1 continues to accept its existing
 format and does not accept `native`.
 
-`native.channel` is `stable` or `testing`. Each package supplies its GitHub
+The channel is derived from the package version: upstream versions containing
+`~` are testing, all others stable. Each package supplies its GitHub
 release `url`, lowercase hexadecimal `sha256`, and nonnegative integer byte
 `size`. Native assets must exist in the declaring release's asset inventory,
 and their URLs must match its exact repository and tag. Native tags and asset
@@ -178,7 +179,6 @@ version metadata.
 {
   "schema_version": 2,
   "native": {
-    "channel": "stable",
     "packages": [
       {
         "url": "https://github.com/gelstable/gel-cli/releases/download/pkg-gel-cli-8.0.0-1/gel-cli-8.0.0-1-amd64.deb",

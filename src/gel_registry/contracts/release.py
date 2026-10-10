@@ -88,11 +88,10 @@ class NativePackage(Replacement):
 
 
 class NativeSection(BaseModel):
-    """Native assets destined for one distribution channel."""
+    """Native assets whose channels are derived from package versions."""
 
     model_config = MODEL_CONFIG
 
-    channel: Literal["stable", "testing"]
     packages: tuple[NativePackage, ...]
 
 

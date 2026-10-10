@@ -24,7 +24,6 @@ def manifest(
     return {
         "schema_version": 2,
         "native": {
-            "channel": "stable",
             "packages": [
                 {
                     "url": f"https://github.com/{repository}/releases/download/{tag}/{asset}",
@@ -78,7 +77,7 @@ def test_combined_manifest_preserves_portable_replacements() -> None:
     "value",
     [
         {"schema_version": 2},
-        {"schema_version": 2, "native": {"channel": "stable", "packages": []}},
+        {"schema_version": 2, "native": {"packages": []}},
         {
             "schema_version": 1,
             "native": None,
@@ -157,13 +156,16 @@ def test_approved_v1_schema_migration_requires_opt_in(
 
 
 @pytest.mark.parametrize("channel", ["stable", "testing"])
-def test_native_channels(channel: str) -> None:
+def test_publisher_channel_is_rejected(channel: str) -> None:
     value = manifest()
     value["native"]["channel"] = channel
-    assert (
-        ReleaseManifest.model_validate(value).model_dump()["native"]["channel"]
-        == channel
-    )
+    with pytest.raises(ValidationError, match="channel"):
+        ReleaseManifest.model_validate(value)
+
+
+def test_native_manifest_needs_no_publisher_channel() -> None:
+    value = manifest()
+    assert ReleaseManifest.model_validate(value).native is not None
 
 
 @pytest.mark.parametrize(
@@ -200,7 +202,7 @@ def test_version_two_accepts_portable_only_indexes(
     assert ReleaseManifest.model_validate(
         {
             **data,
-            "native": {"channel": "testing", "packages": []},
+            "native": {"packages": []},
         }
     ).indexes
     assert ReleaseManifest.model_validate(
@@ -219,7 +221,7 @@ def test_empty_native_section_preserves_portable_tag_acceptance() -> None:
     tag = "v8.0+build"
     data = {
         "schema_version": 2,
-        "native": {"channel": "testing", "packages": []},
+        "native": {"packages": []},
         "replacements": [
             {
                 "sha256": "a" * 64,

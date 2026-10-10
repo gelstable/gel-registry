@@ -13,6 +13,12 @@ SUPPORTED = {"deb": ("amd64", "arm64"), "rpm": ("x86_64", "aarch64")}
 CHANNELS = ("stable", "testing")
 
 
+def version_channel(version: str) -> Literal["stable", "testing"]:
+    """Only the upstream version, excluding the final revision, selects a channel."""
+    upstream = version.rsplit("-", 1)[0] if "-" in version else version
+    return "testing" if "~" in upstream else "stable"
+
+
 class PackageIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
     format: Literal["deb", "rpm"]
@@ -35,6 +41,8 @@ class LockEntry(PackageIdentity):
 
     @model_validator(mode="after")
     def safe_components(self) -> LockEntry:
+        if self.channel != version_channel(self.version):
+            raise ValueError("native lock channel does not match package version")
         if any(part in {".", ".."} for part in self.path.split("/")):
             raise ValueError("unsafe native pool path")
         return self
