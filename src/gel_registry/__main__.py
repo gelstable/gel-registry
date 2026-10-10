@@ -15,7 +15,7 @@ import httpx
 
 from . import candidate, capture, native, normalize, publication, render, validation
 from .constants import CAPTURE_ID
-from .contracts import CaptureManifest
+from .contracts import CaptureManifest, ReleaseManifest
 from .digest import canonical_json
 from .github import create_github_client
 from .rescue import load_plan, publish_plan
@@ -206,6 +206,12 @@ def _run_validate(args: argparse.Namespace) -> int:
     return _print_report(report)
 
 
+def _run_manifest_check(args: argparse.Namespace) -> int:
+    ReleaseManifest.model_validate_json(args.file.read_bytes())
+    print("ok")
+    return 0
+
+
 def _run_native_render(args: argparse.Namespace) -> int:
     changed = native.render_native(
         Path(args.repo), Path(args.cache), Path(args.out), args.base_url
@@ -344,6 +350,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_repo(candidate_parser)
     candidate_parser.set_defaults(handler=_run_build_candidate)
+
+    manifest_parser = commands.add_parser("manifest", help="publisher manifest tools")
+    manifest_commands = manifest_parser.add_subparsers(
+        dest="manifest_command", required=True
+    )
+    manifest_check = manifest_commands.add_parser(
+        "check", help="validate an unpublished release manifest"
+    )
+    manifest_check.add_argument("file", type=Path)
+    manifest_check.set_defaults(handler=_run_manifest_check)
 
     validate_parser = commands.add_parser(
         "validate", help="run deterministic local validation"

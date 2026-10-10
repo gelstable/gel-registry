@@ -1,0 +1,7 @@
+name: Set up nFPM
+description: Install a pinned and checksum-verified nFPM release on Linux.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: bash "$GITHUB_ACTION_PATH/setup.sh"
