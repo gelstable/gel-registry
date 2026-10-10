@@ -2,18 +2,26 @@
 
 import gzip
 import hashlib
-from pathlib import Path
+from typing import Any
 from xml.etree import ElementTree as ET
 
 import pytest
 
-from gel_registry.validation.native import validate_rpm
+from .test_render import render
+from .test_sign_validate import sign
+
+pytestmark = pytest.mark.native_tools
 
 
 @pytest.mark.parametrize("damage", ["xml", "open-checksum", "inventory"])
-def test_invalid_auxiliary_metadata_rejected(tmp_path: Path, damage: str) -> None:
-    repodata = tmp_path / "rpm/stable/x86_64/repodata"
-    repodata.mkdir(parents=True)
+def test_signing_rejects_invalid_auxiliary_metadata(
+    native_repo: Any, monkeypatch: Any, damage: str
+) -> None:
+    repo, _, _ = native_repo
+    assert render(native_repo)[2] == 0
+    repodata = repo / "public/rpm/stable/x86_64/repodata"
+    for path in repodata.iterdir():
+        path.unlink()
     repomd = ET.Element("repomd")
     bodies = {
         "primary": b'<metadata xmlns="http://linux.duke.edu/metadata/common" '
@@ -48,5 +56,5 @@ def test_invalid_auxiliary_metadata_rejected(tmp_path: Path, damage: str) -> Non
             else hashlib.sha256(raw).hexdigest()
         )
     (repodata / "repomd.xml").write_bytes(ET.tostring(repomd))
-    with pytest.raises(ValueError):
-        validate_rpm(tmp_path, "stable", "x86_64", [])
+    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 1
+    assert not (repodata / "repomd.xml.asc").exists()

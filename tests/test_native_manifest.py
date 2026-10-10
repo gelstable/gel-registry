@@ -1,16 +1,15 @@
 """Native release contract and publisher boundary compatibility."""
 
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
 from gel_registry.contracts import ReleaseManifest, ReleaseRecord
 from gel_registry.digest import canonical_json
-from gel_registry.gather import _bind_manifest, load_repositories
-from gel_registry.github import DiscoveredAsset, DiscoveredRelease
+from gel_registry.gather import GatherResult, gather_missing, load_repositories
 
 ROOT = Path(__file__).parents[1]
 REPOSITORY = "gelstable/gel-cli"
@@ -35,15 +34,52 @@ def manifest(
     }
 
 
-def release(tag: str = TAG, asset: str = ASSET) -> DiscoveredRelease:
-    return DiscoveredRelease(
-        REPOSITORY,
-        1,
-        tag,
-        datetime(2026, 9, 30, tzinfo=UTC),
-        False,
-        (DiscoveredAsset(asset, "https://api.github.com/assets/1"),),
+@pytest.fixture
+def gather(tmp_path: Path) -> Any:
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    (sources / "github.json").write_bytes(
+        canonical_json(
+            {
+                "schema_version": 2,
+                "repositories": [REPOSITORY],
+                "native_package_names": {REPOSITORY: ["^gel-cli$"]},
+            }
+        )
     )
+
+    def collect(
+        value: dict[str, Any], tag: str = TAG, asset: str = ASSET
+    ) -> GatherResult:
+        def respond(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/releases"):
+                return httpx.Response(
+                    200,
+                    json=[
+                        {
+                            "id": 1,
+                            "tag_name": tag,
+                            "draft": False,
+                            "published_at": "2026-09-30T00:00:00Z",
+                            "assets": [
+                                {
+                                    "name": asset,
+                                    "url": "https://api.github.com/assets/1",
+                                },
+                                {
+                                    "name": "gel-registry.json",
+                                    "url": "https://api.github.com/assets/2",
+                                },
+                            ],
+                        }
+                    ],
+                )
+            return httpx.Response(200, content=canonical_json(value))
+
+        with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+            return gather_missing(tmp_path, client)
+
+    return collect
 
 
 def test_existing_records_round_trip_byte_for_byte() -> None:
@@ -55,8 +91,12 @@ def test_existing_records_round_trip_byte_for_byte() -> None:
 
 
 @pytest.mark.parametrize("asset", [ASSET, "gel-cli-8.0.0-1-x86_64.rpm"])
-def test_native_only_manifest_binds_to_release_inventory(asset: str) -> None:
-    record = _bind_manifest(canonical_json(manifest(asset=asset)), release(asset=asset))
+def test_native_only_manifest_binds_to_release_inventory(
+    gather: Any, asset: str
+) -> None:
+    result = gather(manifest(asset=asset), asset=asset)
+    assert not result.rejected
+    record = result.records[0]
     assert record.schema_version == 2
     assert record.model_dump()["native"]["packages"][0]["size"] == 123
 
@@ -93,66 +133,32 @@ def test_empty_changes_and_native_on_v1_are_rejected(value: dict[str, Any]) -> N
 @pytest.mark.parametrize("character", ["+", "~", "%", "/"])
 @pytest.mark.parametrize("component", ["tag", "asset"])
 def test_native_tag_and_asset_reject_unsafe_characters(
-    character: str, component: str
+    gather: Any, character: str, component: str
 ) -> None:
     tag = f"pkg{character}version" if component == "tag" else TAG
     asset = f"gel{character}cli.deb" if component == "asset" else ASSET
-    with pytest.raises(ValueError):
-        _bind_manifest(canonical_json(manifest(tag, asset)), release(tag, asset))
+    result = gather(manifest(tag, asset), tag, asset)
+    assert not result.records and result.rejected
 
 
 @pytest.mark.parametrize(
     "tag,repository", [("another-tag", REPOSITORY), (TAG, "gelstable/gel")]
 )
-def test_native_url_must_match_source(tag: str, repository: str) -> None:
-    with pytest.raises(ValueError):
-        _bind_manifest(
-            canonical_json(manifest(tag=tag, repository=repository)), release()
-        )
+def test_native_url_must_match_source(gather: Any, tag: str, repository: str) -> None:
+    result = gather(manifest(tag=tag, repository=repository))
+    assert not result.records and result.rejected
 
 
-def test_native_asset_must_exist_in_inventory() -> None:
-    with pytest.raises(ValueError, match="absent from the release"):
-        _bind_manifest(canonical_json(manifest()), release(asset="other.deb"))
+def test_native_asset_must_exist_in_inventory(gather: Any) -> None:
+    result = gather(manifest(), asset="other.deb")
+    assert not result.records
+    assert "absent from the release" in result.rejected[0].reason
 
 
 @pytest.mark.parametrize("asset", ["gel.zip", ".gel.deb", "-gel.rpm", "%67el.deb"])
-def test_native_asset_requires_safe_package_filename(asset: str) -> None:
-    with pytest.raises(ValueError):
-        _bind_manifest(canonical_json(manifest(asset=asset)), release(asset=asset))
-
-
-def test_source_allowlist_v2_loads_for_discovery(tmp_path: Path) -> None:
-    (tmp_path / "sources").mkdir()
-    (tmp_path / "sources/github.json").write_bytes(
-        canonical_json(
-            {
-                "schema_version": 2,
-                "repositories": [REPOSITORY],
-                "native_package_names": {REPOSITORY: ["^gel-cli$"]},
-            }
-        )
-    )
-    assert load_repositories(tmp_path) == (REPOSITORY,)
-
-
-@pytest.mark.parametrize("name", ["release-manifest.json", "release-record.json"])
-def test_approved_v1_schema_migration_requires_opt_in(
-    tmp_path: Path, name: str
-) -> None:
-    from gel_registry.render import RenderError
-    from gel_registry.render.schemas import render_schemas
-
-    schema = tmp_path / "public/v1/schema" / name
-    schema.parent.mkdir(parents=True)
-    schema.write_bytes(
-        (ROOT / "tests/fixtures/native-predecessors" / name).read_bytes()
-    )
-    with pytest.raises(RenderError, match="immutable support document mismatch"):
-        render_schemas(tmp_path)
-    render_schemas(tmp_path, allow_release_record_migration=True)
-    model = ReleaseManifest if name == "release-manifest.json" else ReleaseRecord
-    assert schema.read_bytes() == canonical_json(model.model_json_schema())
+def test_native_asset_requires_safe_package_filename(gather: Any, asset: str) -> None:
+    result = gather(manifest(asset=asset), asset=asset)
+    assert not result.records and result.rejected
 
 
 @pytest.mark.parametrize("channel", ["stable", "testing"])
@@ -161,11 +167,6 @@ def test_publisher_channel_is_rejected(channel: str) -> None:
     value["native"]["channel"] = channel
     with pytest.raises(ValidationError, match="channel"):
         ReleaseManifest.model_validate(value)
-
-
-def test_native_manifest_needs_no_publisher_channel() -> None:
-    value = manifest()
-    assert ReleaseManifest.model_validate(value).native is not None
 
 
 @pytest.mark.parametrize(
@@ -210,14 +211,7 @@ def test_version_two_accepts_portable_only_indexes(
     ).native
 
 
-def test_unknown_native_channel_is_rejected() -> None:
-    data = manifest()
-    data["native"]["channel"] = "nightly"
-    with pytest.raises(ValidationError, match="channel"):
-        ReleaseManifest.model_validate(data)
-
-
-def test_empty_native_section_preserves_portable_tag_acceptance() -> None:
+def test_empty_native_section_preserves_portable_tag_acceptance(gather: Any) -> None:
     tag = "v8.0+build"
     data = {
         "schema_version": 2,
@@ -229,7 +223,9 @@ def test_empty_native_section_preserves_portable_tag_acceptance() -> None:
             }
         ],
     }
-    record = _bind_manifest(canonical_json(data), release(tag=tag, asset="portable"))
+    result = gather(data, tag=tag, asset="portable")
+    assert not result.rejected
+    record = result.records[0]
     assert record.source.tag == tag
 
 

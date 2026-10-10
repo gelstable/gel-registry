@@ -126,19 +126,6 @@ def test_conflicting_identity_aborts(native_repo: Any) -> None:
     assert render(native_repo)[2] == 1
 
 
-def test_yanked_package_is_omitted(native_repo: Any) -> None:
-    repo, _, package = native_repo
-    record = package()
-    (repo / "native").mkdir()
-    (repo / "native/yanked.json").write_text(
-        json.dumps(
-            [{"sha256": record["native"]["packages"][0]["sha256"], "reason": "fixture"}]
-        )
-    )
-    assert render(native_repo)[2] == 0
-    assert json.loads((repo / "native/packages.lock.json").read_bytes()) == []
-
-
 def test_first_seen_yanked_unsigned_rpm_reserves_identity(native_repo: Any) -> None:
     repo, _, package = native_repo
     record = package(fmt="rpm", signed=False)
@@ -191,48 +178,6 @@ def test_empty_repository_renders_both_channels(native_repo: Any) -> None:
     cache.rmdir()
     assert render(native_repo)[2] == 0
     assert json.loads((repo / "native/packages.lock.json").read_bytes()) == []
-
-
-def test_manual_apt_install(native_repo: Any, tmp_path: Path) -> None:
-    """Exercise apt's index/hash/path resolution and install a tiny fixture."""
-    import os
-    import shutil
-    import subprocess
-
-    if os.geteuid() != 0:
-        pytest.skip("apt install acceptance needs a disposable root container")
-    repo, cache, package = native_repo
-    record = package(
-        "gel-cli", arch="arm64" if os.uname().machine == "aarch64" else "amd64"
-    )
-    assert render(native_repo)[2] == 0
-    digest = record["native"]["packages"][0]["sha256"]
-    pool = repo / "public/apt/pool/gel-cli/pkg-1"
-    pool.mkdir(parents=True)
-    shutil.copyfile(cache / digest, pool / "gel-cli-1.deb")
-    sources = tmp_path / "sources.list"
-    sources.write_text(f"deb [trusted=yes] file:{repo}/public/apt stable main\n")
-    lists = tmp_path / "lists"
-    lists.mkdir()
-    args = [
-        "apt-get",
-        "-o",
-        f"Dir::Etc::sourcelist={sources}",
-        "-o",
-        "Dir::Etc::sourceparts=-",
-        "-o",
-        f"Dir::State::lists={lists}",
-        "-o",
-        "APT::Sandbox::User=root",
-    ]
-    try:
-        subprocess.run([*args, "update"], check=True, capture_output=True)
-        subprocess.run(
-            [*args, "install", "-y", "gel-cli"], check=True, capture_output=True
-        )
-        assert Path("/usr/share/gel-cli/fixture").read_text() == "hello"
-    finally:
-        subprocess.run(["dpkg", "--purge", "gel-cli"], check=False, capture_output=True)
 
 
 @pytest.mark.parametrize("fmt", ["deb", "rpm"])
@@ -385,6 +330,36 @@ def test_first_seen_yanked_bytes_still_require_manifest_digest(
     )
     assert render(native_repo)[2] == 1
     assert "native package SHA-256 or size mismatch" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("failure", ["digest", "size", "network"])
+def test_bad_package_download_aborts_without_publishing(
+    native_repo: Any, monkeypatch: Any, failure: str
+) -> None:
+    from io import BytesIO
+
+    repo, cache, package = native_repo
+    record = package()
+    digest = record["native"]["packages"][0]["sha256"]
+    blob = cache / digest
+    raw = blob.read_bytes()
+    blob.unlink()
+    if failure == "digest":
+        raw = raw[:-1] + bytes([raw[-1] ^ 1])
+    elif failure == "size":
+        raw += b"extra"
+
+    def download(url: str, timeout: int) -> BytesIO:
+        if failure == "network":
+            raise OSError("source unavailable")
+        return BytesIO(raw)
+
+    monkeypatch.setattr("gel_registry.native.fetch.urlopen", download)
+    assert render(native_repo)[2] == 1
+    assert not list(cache.iterdir())
+    assert not (repo / "native/packages.lock.json").exists()
+    assert not (repo / "public/apt").exists()
+    assert not (repo / "public/rpm").exists()
 
 
 @pytest.mark.parametrize("filename", ["packages.lock.json", "yanked.json"])

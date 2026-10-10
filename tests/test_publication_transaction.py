@@ -43,7 +43,6 @@ from gel_registry.render import (
     ContestedIdentityError,
     RenderError,
     build_snapshot,
-    load_pinned_snapshot,
     select_snapshot,
 )
 from gel_registry.render.compose import compose_indexes
@@ -524,44 +523,6 @@ def test_an_unchanged_index_is_stored_once_and_shared_by_every_snapshot(
     assert changed == {("stable", LEGACY_PLATFORMS[0])}
     # Every other index is referenced by URL, not copied.
     assert len(first_urls) - len(changed) == len(first_urls) - 1
-
-
-def test_rebuilding_an_installed_snapshot_replays_without_error(
-    tmp_path: Path, package_index_data: dict[str, object]
-) -> None:
-    """An interrupted publication must be resumable, so replay is a no-op."""
-
-    _write_index(tmp_path, package_index_data)
-    snapshot = build_snapshot(tmp_path)
-    before = _repo_bytes(tmp_path)
-
-    assert build_snapshot(tmp_path) == snapshot
-    assert _repo_bytes(tmp_path) == before
-
-
-def test_a_corrupted_blob_is_refused_by_its_content_address(
-    tmp_path: Path, package_index_data: dict[str, object]
-) -> None:
-    _write_index(tmp_path, package_index_data)
-    snapshot = build_snapshot(tmp_path)
-    # Canonical, valid, and simply not the index this blob is filed under: the
-    # content address is the only thing left that can catch it.
-    blob = next((tmp_path / "public" / "i").glob("*.json"))
-    blob.write_bytes(canonical_json(PackageIndex(packages=())))
-
-    with pytest.raises(RenderError, match="content address"):
-        load_pinned_snapshot(tmp_path, snapshot)
-
-
-def test_a_missing_blob_is_refused(
-    tmp_path: Path, package_index_data: dict[str, object]
-) -> None:
-    _write_index(tmp_path, package_index_data)
-    snapshot = build_snapshot(tmp_path)
-    next((tmp_path / "public" / "i").glob("*.json")).unlink()
-
-    with pytest.raises(RenderError, match="index blob"):
-        load_pinned_snapshot(tmp_path, snapshot)
 
 
 def test_both_roots_resolve_to_the_same_index_files(

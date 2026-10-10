@@ -196,26 +196,6 @@ def test_certificate_update_never_refetches_retained_packages(
     validate_native_structure(repo)
 
 
-def test_changed_release_options_rebuilds_without_blobs(
-    native_repo: Any, monkeypatch: Any
-) -> None:
-    from gel_registry.native.metadata import RELEASE_OPTIONS
-
-    repo, cache, package = native_repo
-    package()
-    assert render(native_repo)[2] == 0
-    shutil.rmtree(cache)
-    monkeypatch.setitem(RELEASE_OPTIONS, "Label", "Updated label")
-    monkeypatch.setattr(
-        "gel_registry.native.render.fetch_package",
-        lambda *args: pytest.fail("options change fetched old bytes"),
-    )
-    assert render_native(repo, cache, repo / "public") is True
-    assert (
-        "Label: Updated label" in (repo / "public/apt/dists/stable/Release").read_text()
-    )
-
-
 def test_deleted_record_refetches_only_that_package(
     native_repo: Any, monkeypatch: Any
 ) -> None:

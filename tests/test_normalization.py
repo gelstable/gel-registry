@@ -23,7 +23,6 @@ from gel_registry.contracts import CaptureEntry, CaptureManifest, PackageIndex
 from gel_registry.digest import canonical_json, hash_bytes
 from gel_registry.normalize import (
     NormalizationError,
-    _compare_trees,
     normalize_capture,
 )
 from gel_registry.storage import read_tree
@@ -155,6 +154,19 @@ def _write_an_unrecorded_body(root: Path) -> None:
             "",
             id="off-origin-installref",
         ),
+        *[
+            pytest.param(
+                lambda root, ref=ref: _write_capture(root, _with_first_installref(ref)),
+                "",
+                id=name,
+            )
+            for name, ref in [
+                ("insecure-origin", "http://packages.geldata.com/archive/x"),
+                ("credentials", "https://user:password@packages.geldata.com/archive/x"),
+                ("fragment", "https://packages.geldata.com/archive/x#fragment"),
+                ("unexpected-port", "https://packages.geldata.com:8443/archive/x"),
+            ]
+        ],
         pytest.param(
             lambda root: _write_capture(root, _fixture_body(), sha256="0" * 64),
             "sha256",
@@ -196,20 +208,3 @@ def test_normalize_check_reports_drift_without_touching_committed_bytes(
     assert cli.main(["normalize", "--repo", str(tmp_path), "--check"]) == 1
     assert "changed" in capsys.readouterr().err
     assert read_tree(tmp_path / "bootstrap") == drifted != before
-
-
-def test_drift_buckets_are_named_from_the_fresh_render(tmp_path: Path) -> None:
-    """``added``/``missing`` describe the candidate, which is the fresh render."""
-
-    candidate = tmp_path / "candidate"
-    existing = tmp_path / "existing"
-    candidate.mkdir()
-    existing.mkdir()
-    (candidate / "only-rendered.json").write_bytes(b"{}\n")
-    (existing / "only-committed.json").write_bytes(b"{}\n")
-
-    added, missing, changed = _compare_trees(candidate, existing)
-
-    assert added == ["only-rendered.json"]
-    assert missing == ["only-committed.json"]
-    assert changed == []

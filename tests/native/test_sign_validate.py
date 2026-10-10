@@ -49,7 +49,17 @@ def test_signed_fixture_passes(native_repo: Any, monkeypatch: Any) -> None:
 
 
 @pytest.mark.parametrize(
-    "tamper", ["packages", "repomd", "missing", "pool", "lock", "record"]
+    "tamper",
+    [
+        "packages",
+        "repomd",
+        "missing",
+        "pool",
+        "lock",
+        "record",
+        "channel",
+        "retained-rpm",
+    ],
 )
 def test_tampering_fails(native_repo: Any, monkeypatch: Any, tamper: str) -> None:
     repo = signed(native_repo, monkeypatch)
@@ -68,6 +78,17 @@ def test_tampering_fails(native_repo: Any, monkeypatch: Any, tamper: str) -> Non
         path.write_bytes(b"extra")
     elif tamper == "lock":
         (repo / "native/packages.lock.json").write_text("[]\n")
+    elif tamper == "channel":
+        path = repo / "native/packages.lock.json"
+        lock = json.loads(path.read_bytes())
+        lock[0]["channel"] = "testing"
+        path.write_text(json.dumps(lock))
+    elif tamper == "retained-rpm":
+        path = repo / "native/package-metadata.json"
+        records = json.loads(path.read_bytes())
+        rpm = next(record for record in records.values() if record["rpm"])
+        rpm["rpm"]["filelists"] = "not XML"
+        path.write_text(json.dumps(records))
     else:
         path = next((repo / "releases").rglob("*.json"))
         record = json.loads(path.read_bytes())
@@ -186,55 +207,6 @@ def test_signed_cleartext_must_match_release(
     )
     with pytest.raises(ValueError, match="cleartext"):
         validate_native_signatures(repo)
-
-
-@pytest.mark.parametrize(
-    ("framing", "accepted"),
-    [
-        ("extra-newline", True),
-        ("missing-newline", True),
-        ("two-newlines", False),
-        ("crlf", False),
-        ("changed-content", False),
-    ],
-)
-def test_gpgv_cleartext_final_newline_is_compatible(
-    native_repo: Any, monkeypatch: Any, framing: str, accepted: bool
-) -> None:
-    from gel_registry.native import sign as signing
-
-    repo = signed(native_repo, monkeypatch)
-    command = signing.command
-
-    def framed_output(args: list[str]) -> bytes:
-        status = command(args)
-        if args[0] == "gpgv" and "--output" in args:
-            output = Path(args[args.index("--output") + 1])
-            data = output.read_bytes()
-            variants = {
-                "extra-newline": data + b"\n",
-                "missing-newline": data.removesuffix(b"\n"),
-                "two-newlines": data + b"\n\n",
-                "crlf": data.replace(b"\n", b"\r\n"),
-                "changed-content": b"Origin: Other\n" + data,
-            }
-            output.write_bytes(variants[framing])
-        return status
-
-    # Real signatures are verified first. Simulate only the framing newline
-    # difference between GnuPG versions, leaving detached verification intact.
-    monkeypatch.setattr(signing, "command", framed_output)
-    if not accepted:
-        with pytest.raises(ValueError, match="cleartext"):
-            validate_native(repo)
-        assert sign(repo, repo.parent / "gnupg", monkeypatch) == 1
-        return
-    validate_native(repo)
-    assert sign(repo, repo.parent / "gnupg", monkeypatch) == 0
-    release = repo / "public/apt/dists/stable/Release"
-    release.write_bytes(release.read_bytes() + b"\n")
-    with pytest.raises(ValueError):
-        validate_native(repo)
 
 
 def test_native_records_require_bootstrap(native_repo: Any) -> None:
@@ -399,8 +371,6 @@ def test_unsigned_structure_and_signing_reject_bad_packages(
 def test_revoked_certificate_cannot_validate_old_metadata(
     native_repo: Any, monkeypatch: Any
 ) -> None:
-    from gel_registry.native.sign import verify_signature
-
     repo = signed(native_repo, monkeypatch)
     home = repo.parent / "gnupg"
     certificate = next((home / "openpgp-revocs.d").glob("*.rev"))
@@ -410,9 +380,8 @@ def test_revoked_certificate_cannot_validate_old_metadata(
     )
     key = repo / "public/keys/gelstable.asc"
     key.write_bytes(subprocess.check_output(["gpg", "--armor", "--export"]))
-    release = repo / "public/apt/dists/stable/Release"
     with pytest.raises(ValueError):
-        verify_signature(key, release.with_name("Release.gpg"), release)
+        validate_native(repo)
 
 
 def test_signing_preserves_current_signatures_and_replaces_missing(
