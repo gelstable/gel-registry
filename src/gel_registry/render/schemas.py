@@ -110,7 +110,7 @@ def _client_documents(public: Path) -> list[tuple[Path, bytes]]:
             f"[{stem}]\nname=Gelstable"
             + (" Testing" if channel == "testing" else "")
             + f"\nbaseurl=https://registry.gelstable.com/rpm/{channel}/$basearch\n"
-            + f"enabled={0 if channel == 'testing' else 1}\n"
+            + "enabled=1\n"
             + "gpgcheck=1\nrepo_gpgcheck=1\n"
             + "gpgkey=https://registry.gelstable.com/keys/gelstable.asc\n"
         )

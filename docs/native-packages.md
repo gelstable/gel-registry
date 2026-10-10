@@ -22,7 +22,7 @@ EBFC46CC958983DD73D6E7D7F7C050A836EDB7EC
 
 The armored certificate is published at
 `https://registry.gelstable.com/keys/gelstable.asc`, with its full primary
-fingerprint at `/keys/gelstable.fingerprint`. At launch, compare the downloaded
+fingerprint at `/keys/gelstable.fingerprint`. Compare the downloaded
 key with the production fingerprint published here and in the registry README.
 Stop if they disagree.
 
@@ -97,26 +97,27 @@ PostGIS extension. Native server packages use **bundled libraries** instead of
 relying on distribution versions of their private runtime libraries. Server
 and extension updates come through these packages; keep them updated together.
 
-APT testing uses a second source file:
+For APT, replace the stable source with testing:
 
 ```sh
+sudo rm -f /etc/apt/sources.list.d/gelstable.sources
 sudo curl -fsSLo /etc/apt/sources.list.d/gelstable-testing.sources https://registry.gelstable.com/gelstable-testing.sources
 sudo apt-get update
-sudo apt-get install -t testing gel-7 gel-server-7-ext-postgis
+sudo apt-get install gel-7 gel-server-7-ext-postgis
 ```
 
-With both suites enabled, APT may choose a newer testing version during ordinary
-upgrades. Use the testing source instead of stable: testing includes every stable
+Use the testing source instead of stable: testing includes every stable
 package as well as prereleases. Enabling both sources is harmless.
 
-DNF testing is disabled by default and enabled explicitly for a transaction:
+For DNF, replace the stable repository configuration with testing:
 
 ```sh
+sudo rm -f /etc/yum.repos.d/gelstable.repo
 sudo curl -fsSLo /etc/yum.repos.d/gelstable-testing.repo https://registry.gelstable.com/gelstable-testing.repo
-sudo dnf --enablerepo=gelstable-testing install gel-7 gel-server-7-ext-postgis
+sudo dnf install gel-7 gel-server-7-ext-postgis
 ```
 
-The testing repository has `enabled=0`, `gpgcheck=1` and `repo_gpgcheck=1`.
+The testing repository has `enabled=1`, `gpgcheck=1` and `repo_gpgcheck=1`.
 Removing testing configuration does not downgrade installed packages. Wait for
 a higher stable version or plan an explicit downgrade after checking data
 compatibility.
