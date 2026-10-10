@@ -56,6 +56,16 @@ def test_server_revision_plan(
         assert set(plan[0]["sources"]) == {"x86_64", "aarch64"}
 
 
+@pytest.mark.parametrize("repack,want", [(False, None), (True, 2)])
+def test_combined_product_release_reserves_native_revision(
+    repack: bool, want: int | None
+) -> None:
+    source = server_source()
+    source["assets"].append(asset("gel-7_1%3A7.1-1_amd64.deb"))
+    result = planner().build_plan("server", source, [source], {}, repack)
+    assert (result[0]["revision"] if result else None) == want
+
+
 def test_prerelease_version_plan() -> None:
     item = planner().build_plan("server", server_source("v7.2-rc.1"), [], {}, False)[0]
     assert item["native_version"] == "7.2~rc.1"
@@ -86,6 +96,17 @@ def test_legacy_postgis_builds_selected_from_real_portable_indexes() -> None:
         "draft": False,
         "assets": assets,
     }
+    # A later release in the index must not displace this release's builds.
+    import copy
+
+    for packages in indexes.values():
+        newer = copy.deepcopy(
+            next(p for p in packages if p["basename"] == "gel-server-6-ext-postgis")
+        )
+        newer["version_details"]["metadata"]["build_revision"] = "99999999999999"
+        for ref in newer["installrefs"]:
+            ref["ref"] = ref["ref"].replace("3.5.1", "3.5.2")
+        packages.append(newer)
     item = planner().build_plan("postgis", source, [], indexes, False)[0]
     assert "c6766e7" in item["sources"]["x86_64"]["url"]
     assert "edaa7ce" in item["sources"]["aarch64"]["url"]

@@ -100,14 +100,18 @@ def render_native(
                     saved = StoredPackage(identity=inspected, size=package.size)
                     extract_metadata(blob, saved, scratch / digest, _command)
                     if fmt == "rpm":
-                        saved.signer = rpm_signer(blob)
+                        try:
+                            saved.signer = rpm_signer(blob)
+                        except ValueError:
+                            if live:
+                                raise
                         if live:
                             from ..validation.native import signing_subkeys
 
                             matches = [
                                 valid
                                 for fingerprint, valid in signing_subkeys(key).items()
-                                if fingerprint.endswith(saved.signer)
+                                if saved.signer and fingerprint.endswith(saved.signer)
                             ]
                             if matches != [True]:
                                 raise ValueError(

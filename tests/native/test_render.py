@@ -139,6 +139,20 @@ def test_yanked_package_is_omitted(native_repo: Any) -> None:
     assert json.loads((repo / "native/packages.lock.json").read_bytes()) == []
 
 
+def test_first_seen_yanked_unsigned_rpm_reserves_identity(native_repo: Any) -> None:
+    repo, _, package = native_repo
+    record = package(fmt="rpm", signed=False)
+    digest = record["native"]["packages"][0]["sha256"]
+    (repo / "native").mkdir()
+    (repo / "native/yanked.json").write_text(
+        json.dumps([{"sha256": digest, "reason": "unsigned"}])
+    )
+    assert render(native_repo)[2] == 0
+    assert json.loads((repo / "native/packages.lock.json").read_text()) == []
+    package(fmt="rpm", payload="replacement")
+    assert render(native_repo)[2] == 1
+
+
 def test_wrongly_signed_rpm_aborts(native_repo: Any, tmp_path: Path) -> None:
     import os
     import subprocess

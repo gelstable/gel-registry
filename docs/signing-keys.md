@@ -217,8 +217,23 @@ gpg --homedir /ENCRYPTED/gelstable-key --armor --export PRIMARY_FINGERPRINT > re
 ```
 
 Make a scratch copy and check that the selected subkey, rather than the primary,
-is revoked. Pass that updated certificate to the helper's `rotate-subkey`
-recovery interface when creating the replacement bundle. Keep the full backup
+is revoked (`gpg --homedir /ENCRYPTED/gelstable-key --with-colons --list-keys
+PRIMARY_FINGERPRINT` must show `sub:r` for its fingerprint and an unrevoked
+primary). Export a refreshed passphrase-protected secret backup from that home;
+the original backup predates the revocation:
+
+```sh
+gpg --homedir /ENCRYPTED/gelstable-key --armor --export-secret-keys PRIMARY_FINGERPRINT > /ENCRYPTED/revoked-primary-backup.asc
+python3 scripts/signing-key.py rotate-subkey \
+  --backup /ENCRYPTED/revoked-primary-backup.asc \
+  --revocation-certificate /ENCRYPTED/primary-revocation.rev \
+  --primary-fingerprint PRIMARY_FINGERPRINT \
+  --out /ENCRYPTED/replacement-bundle
+gpg --with-colons --import-options show-only --import /ENCRYPTED/replacement-bundle/public.asc
+```
+
+Verify the replacement public certificate still lists the compromised subkey
+as `sub:r` and includes the new signing subkey. Keep the refreshed secret backup
 and revocation evidence encrypted. Follow [the compromise checklist](operations.md#key-compromise)
 for the certificate/yank PR, automated metadata signing, repacks and advisory.
 No operator signs repository metadata locally.

@@ -7,7 +7,7 @@ import os
 import re
 import subprocess
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 from urllib.request import urlopen
 
 ARCHES = ("x86_64", "aarch64")
@@ -32,7 +32,10 @@ def build_revision(package: dict[str, Any]) -> str:
 
 
 def index_source(
-    packages: list[dict[str, Any]], basename: str, suffix: str
+    packages: list[dict[str, Any]],
+    basename: str,
+    suffix: str,
+    allowed_names: set[str] | None = None,
 ) -> dict[str, Any]:
     candidates = [
         (build_revision(p), ref)
@@ -44,6 +47,7 @@ def index_source(
         )
         for ref in p["installrefs"]
         if ref["ref"].endswith(suffix)
+        and (allowed_names is None or ref["ref"].rsplit("/", 1)[1] in allowed_names)
     ]
     if not candidates:
         raise ValueError(f"no portable index source for {basename}")
@@ -103,7 +107,10 @@ def build_plan(
                 slot_match = re.fullmatch(pattern, candidates[0]["name"])
                 assert slot_match
                 chosen = index_source(
-                    indexes[arch], f"gel-server-{slot_match[1]}-ext-postgis", ".zip"
+                    indexes[arch],
+                    f"gel-server-{slot_match[1]}-ext-postgis",
+                    ".zip",
+                    {a["name"] for a in candidates},
                 )
                 candidates = [
                     a
@@ -143,6 +150,27 @@ def build_plan(
             )
         )
     ]
+    # Combined product releases reserve the same immutable package revisions.
+    package_names = (
+        [f"gel-{slot}", f"gel-server-{slot}"]
+        if product == "server"
+        else [f"gel-server-{slot}-ext-postgis"]
+    )
+    asset_pattern = (
+        "(?:"
+        + "|".join(map(re.escape, package_names))
+        + ")[-_]"
+        + r"(?:1:)?"
+        + re.escape(native_version)
+        + r"-([1-9][0-9]*)[-_.](?:amd64|arm64|x86_64|aarch64)\.(?:deb|rpm)"
+    )
+    revisions.extend(
+        int(match[1])
+        for release in [source, *releases]
+        if not release.get("draft")
+        for asset in release.get("assets", [])
+        if (match := re.fullmatch(asset_pattern, unquote(asset["name"])))
+    )
     if revisions and not repack:
         return []
     revision = max(revisions, default=0) + 1
