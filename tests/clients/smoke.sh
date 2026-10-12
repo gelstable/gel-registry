@@ -4,25 +4,48 @@ set -euo pipefail
 channel=${1:-stable}
 case "$channel" in stable|testing) ;; *) exit 2 ;; esac
 base=https://registry.gelstable.com
+verify_key() {
+  local key=$1 expected=${GELSTABLE_EXPECTED_FPR:?committed production fingerprint is required} fingerprints
+  [[ "$expected" =~ ^[A-Fa-f0-9]{40}$|^[A-Fa-f0-9]{64}$ ]] || {
+    echo 'Invalid expected production fingerprint' >&2
+    return 1
+  }
+  fingerprints=$(gpg --batch --with-colons --show-keys "$key" | awk -F: '
+    $1 == "pub" { primary = 1; next }
+    primary && $1 == "fpr" { print $10; primary = 0 }
+  ')
+  # Reject extra primary keys as well as a missing or unexpected certificate.
+  if test "$fingerprints" != "${expected^^}"; then
+    echo 'Downloaded certificate does not match the committed production fingerprint' >&2
+    return 1
+  fi
+}
 configure() {
   if command -v apt-get >/dev/null; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    apt-get install -y curl ca-certificates gnupg util-linux
+    apt-get install -y curl ca-certificates gnupg util-linux diffutils
     install -d /etc/apt/keyrings
     curl -fsSLo /etc/apt/keyrings/gelstable.asc "$base/keys/gelstable.asc"
-    gpg --show-keys /etc/apt/keyrings/gelstable.asc
+    verify_key /etc/apt/keyrings/gelstable.asc
     config=gelstable.sources
     test "$channel" = stable || config=gelstable-testing.sources
     curl -fsSLo /etc/apt/sources.list.d/gelstable.sources "$base/$config"
+    cmp /etc/apt/sources.list.d/gelstable.sources "/expected/$config"
     apt-get update
     apt-get install -y gel-7 gel-server-7-ext-postgis
     dpkg-query -W gel-7 gel-server-7 gel-server-7-ext-postgis gel-cli
   else
-    dnf install -y --allowerasing curl gnupg2 util-linux
+    dnf install -y --allowerasing curl gnupg2 util-linux diffutils
+    install -d /etc/pki/rpm-gpg
+    curl -fsSLo /etc/pki/rpm-gpg/gelstable.asc "$base/keys/gelstable.asc"
+    verify_key /etc/pki/rpm-gpg/gelstable.asc
+    rpmkeys --import /etc/pki/rpm-gpg/gelstable.asc
     config=gelstable.repo
     test "$channel" = stable || config=gelstable-testing.repo
     curl -fsSLo /etc/yum.repos.d/gelstable.repo "$base/$config"
+    cmp /etc/yum.repos.d/gelstable.repo "/expected/$config"
+    sed -i 's|^gpgkey=.*|gpgkey=file:///etc/pki/rpm-gpg/gelstable.asc|' /etc/yum.repos.d/gelstable.repo
     if test "$channel" = testing; then
       dnf -y --enablerepo=gelstable-testing install gel-7 gel-server-7-ext-postgis
     else

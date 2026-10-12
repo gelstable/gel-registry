@@ -401,7 +401,11 @@ stable server or CLI change → Docker reconciler → build, test, publish
 ### Acceptance and recovery
 
 - [ ] Run `native-smoke` for deployed supported systems and both architectures.
-- [ ] Use `tests/clients/migrate.sh` for the legacy-source migration check.
+- [ ] Dispatch `native-smoke` with mode `migration` for the legacy-source check.
+      Both modes pass the committed primary fingerprint to the containers and
+      mount `public/` at `/expected` read-only. The scripts verify downloaded
+      certificates and compare repository configurations with those committed
+      files before installing packages.
 - [ ] If retained package records are lost, restore them from Git; deleting a
       record makes the next render download that package again.
 - [ ] Restore failed local renders with Git, preserving intended source edits.

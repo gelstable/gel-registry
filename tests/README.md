@@ -16,6 +16,7 @@ exercise adversarial inputs and recovery states around those flows.
 | Shared publisher actions | `actions/test_publishers.py`, `native/test_shared_signer.py` | Immutable revision allocation across combined and native-only releases, source-specific build selection, final-byte manifests, verified uploads, safe draft cleanup |
 | Hosting and custody | `test_hosting.py`, `test_signing_key_script.py`, `test_signing_secrets.py` | Static route/cache behavior, production hostname, isolated key ceremony and recovery, private material never printed |
 | Real client acceptance | `clients/apt.sh`, `clients/dnf.sh` | Signed installation, tamper/unsigned rejection, testing-only prerelease-to-final upgrades |
+| Production acceptance | `test_native_acceptance.py`, `actions/test_signer_cleanup.py` | Committed certificate trust, stable-only testing population, migration trust, signer cleanup on success and failure |
 
 Run the Python suite with `uv run pytest -q`. Native cases use real Linux package
 tools and a disposable signing key. Follow

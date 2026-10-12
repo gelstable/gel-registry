@@ -11,7 +11,7 @@ The **sole accepted integration seam** for both regular package releases and leg
 - **`indexes` (Net-New Releases)**: The mechanism for net-new releases. Requires complete client-ready `PackageEntry` definitions (including version details, revision, architecture, slot, and installrefs with sha256, blake2b, and byte size).
 - **Draft Releases Are Invisible**: GitHub releases marked as `draft` are completely invisible to registry discovery; only published non-draft releases are evaluated.
 - **No Rescue-Specific Evidence Ingestion**: The registry never ingests rescue-specific evidence formats, legacy capture manifests, or internal audit logs.
-- **Portable Artifact Boundary**: For portable releases, the registry never downloads release binaries, inspects package files, executes decompresors, or parses ELF/Mach-O headers during release promotion.
+- **Portable Artifact Boundary**: For portable releases, the registry never downloads release binaries, inspects package files, executes decompressors, or parses ELF/Mach-O headers during release promotion.
 
 ## Publisher responsibilities and boundary
 
@@ -167,7 +167,7 @@ format and does not accept `native`.
 
 The channel is derived from the package version: upstream versions containing
 `~` are testing, all others stable. Each package supplies its GitHub
-release `url`, lowercase hexadecimal `sha256`, and nonnegative integer byte
+release `url`, lowercase hexadecimal `sha256`, and positive integer byte
 `size`. Native assets must exist in the declaring release's asset inventory,
 and their URLs must match its exact repository and tag. Native tags and asset
 names must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`; assets must end in `.deb` or

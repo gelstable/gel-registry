@@ -5,8 +5,8 @@ set -euo pipefail
 : "${PACKAGE_SIGNING_FPR:?}"
 [[ "$PACKAGE_SIGNING_FPR" =~ ^[A-Fa-f0-9]{40}$|^[A-Fa-f0-9]{64}$ ]]
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
 export GNUPGHOME="$work/gnupg"
+trap 'gpgconf --kill gpg-agent || true; rm -rf "$work"' EXIT
 mkdir -m 0700 "$GNUPGHOME"
 printf '%s\n' "$PACKAGE_SIGNING_KEY" | gpg --batch --import
 unset PACKAGE_SIGNING_KEY

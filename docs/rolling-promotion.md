@@ -36,8 +36,9 @@ The automated pipeline is defined in `.github/workflows/promote.yml` and driven 
 
 The `render` job has `contents: read` and no signing secrets. It discovers
 release records, renders the portable snapshot, and runs `native render` with
-APT/RPM tools. Its SHA-256 package cache is restored with a key derived from
-all committed `releases/**/*.json` files; restored bytes are always verified.
+APT/RPM tools. It reuses committed records in `native/package-metadata.json`
+and downloads only newly seen packages into a temporary SHA-256 package cache;
+downloaded bytes are always verified. The workflow does not restore this cache.
 The scratch package pool and package cache are excluded from the artifact.
 
 `promote.py build --cache <cache> --artifact <directory>` produces three files:

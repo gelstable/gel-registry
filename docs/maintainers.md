@@ -62,8 +62,9 @@ with `gel-registry validate --repo .`.
 
 The generated `gelstable.sources` and `gelstable.repo` select stable. The testing
 APT source is a separate `gelstable-testing.sources`; the testing DNF section
-in `gelstable-testing.repo` starts disabled. Both clients use the same public
-certificate, require repository signatures, and verify package checksums.
+in `gelstable-testing.repo` is enabled when that file is installed. Both clients
+use the same public certificate, require repository signatures, and verify
+package checksums.
 Install the APT certificate at `/etc/apt/keyrings/gelstable.asc` and compare its
 fingerprint with the published fingerprint before installing the source file.
 
