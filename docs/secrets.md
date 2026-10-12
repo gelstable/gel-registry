@@ -1,6 +1,6 @@
 # Secrets and key management
 
-Inventory of every credential used by this project: storage location, access, and rotation procedure. Neither secret is stored in this repository.
+Inventory of every credential used by this project: storage location, access, and rotation procedure. No credential is stored in this repository.
 
 ## Inventory
 
@@ -8,6 +8,8 @@ Inventory of every credential used by this project: storage location, access, an
 | --- | --- | --- | --- |
 | Vercel provisioning token | HCP workspace variable `vercel_api_token` | HCP runs only | Manual (see below). **Expires 2026-11-20** |
 | HCP team token | GitHub Actions secret `TF_API_TOKEN` | CI only | HCP dashboard. **Expires 2026-11-21** |
+| `REGISTRY_SIGNING_KEY` | GitHub Environment `registry-signing` | Default-branch promotion signing step only | Replace signing subkey and committed public key together |
+| `REGISTRY_SIGNING_FPR` | GitHub Environment `registry-signing` | Default-branch promotion signing step only | Full fingerprint of the selected signing subkey |
 | HCP user tokens | Maintainer workstation (`terraform login`) | Maintainer | Owner's responsibility |
 
 Maintainers do not hold Vercel tokens. `terraform plan` runs remotely in HCP using the workspace variable, requiring only HCP access.
@@ -91,6 +93,38 @@ Periodically audit active Vercel tokens against this document; revoke unclaimed 
 
 ## Scaling secret management
 
-GitHub Actions secrets and HCP workspace variables are sufficient for two credentials.
+GitHub Environment secrets and HCP workspace variables cover the current credential inventory.
 
-If secret count grows to 3+, adopt [SOPS](https://github.com/getsops/sops) with [age](https://github.com/FiloSottile/age) keys committed to the repository. Do not adopt SOPS prematurely: committed ciphertext is permanent and subject to retroactive decryption if an age key ever leaks.
+If shared configuration needs encrypted credentials outside these stores, consider [SOPS](https://github.com/getsops/sops) with [age](https://github.com/FiloSottile/age) keys committed to the repository. Do not adopt SOPS prematurely: committed ciphertext is permanent and subject to retroactive decryption if an age key ever leaks.
+
+## Registry metadata signing Environment
+
+Create the GitHub Environment `registry-signing` with a deployment branch rule
+allowing only the repository default branch (`main`). Do not allow tags or
+candidate branches. Configure no required reviewers: the human approval gate
+is review and merge of the resulting promotion PR, after metadata signing.
+The workflow also restricts its publish job to the default branch.
+
+Store `REGISTRY_SIGNING_KEY` as the armored secret signing subkey export,
+without the primary private key. Store `REGISTRY_SIGNING_FPR` as its
+full signing-subkey fingerprint. The workflow maps this selector to
+`GELSTABLE_SIGNING_FPR` for `gel-registry native sign`, which selects that
+exact subkey and verifies signatures with `public/keys/gelstable.asc`.
+
+The key exists only in a temporary `GNUPGHOME` in the metadata signing step.
+The step deletes that home on success or failure. The earlier render job has
+no signing secrets and is the only job that downloads and parses package
+files. Publishing and final validation run after key cleanup.
+
+## Product package signing
+
+`gel`, `gel-cli` and `gel-postgis` each store `PACKAGE_SIGNING_KEY` and
+`PACKAGE_SIGNING_FPR` in `package-signing`. Allow the protected default branch
+and protected `release/*` branches, with matching PR-only rulesets and no force
+pushes or deletion. Render/discovery jobs never receive signing secrets.
+
+Run `scripts/set-signing-secrets.sh BUNDLE_DIR` to set all eight registry/product
+secrets from `automation-subkey.asc` and the `signing` field of
+`fingerprints.json`. It lists the destinations and asks for `yes`; key bytes
+are streamed to `gh` and never printed. Keep the bundle on encrypted storage.
+See [custody and recovery](signing-keys.md) and [rotation](operations.md#routine-key-rotation).

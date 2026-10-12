@@ -52,6 +52,7 @@ def _assert_bootstrap_reproduction(repo: Path) -> None:
         reproduced = root / "reproduced"
         reproduced.mkdir()
         shutil.copytree(repo / "upstream", reproduced / "upstream", symlinks=True)
+        shutil.copytree(repo / "sources", reproduced / "sources", symlinks=True)
 
         capture_root = (
             reproduced
@@ -80,7 +81,7 @@ def test_bootstrap_reproduction_survives_a_valid_later_promotion() -> None:
     with tempfile.TemporaryDirectory(prefix="gel-registry-promoted-") as directory:
         promoted = Path(directory) / "repo"
         repo = _committed_source()
-        for name in ("upstream", "bootstrap", "pointers", "public"):
+        for name in ("sources", "upstream", "bootstrap", "pointers", "public"):
             shutil.copytree(repo / name, promoted / name, symlinks=True)
 
         copy_release(promoted)
@@ -114,7 +115,7 @@ def test_bootstrap_reproduction_rejects_immutable_history_drift(
     with tempfile.TemporaryDirectory(prefix="gel-registry-drift-") as directory:
         repo = Path(directory) / "repo"
         source = _committed_source()
-        for name in ("upstream", "bootstrap", "public"):
+        for name in ("sources", "upstream", "bootstrap", "public"):
             shutil.copytree(source / name, repo / name, symlinks=True)
 
         if target == "bootstrap":

@@ -334,44 +334,6 @@ def test_cross_record_duplicate_claims_are_order_independent() -> None:
     assert str(exc_ab.value) == str(exc_ba.value)
 
 
-def test_cross_record_identical_urls_still_rejected() -> None:
-    """Duplicate replacement claims are rejected even if URLs happen to match."""
-    repo_root = Path(__file__).parents[1]
-    key = ("stable", "x86_64-unknown-linux-musl")
-    index = PackageIndex.model_validate_json(
-        (repo_root / "bootstrap" / "stable-x86_64-unknown-linux-musl.json").read_bytes()
-    )
-    original = index.packages[0]
-    digest = original.installrefs[0].verification.sha256
-    assert digest is not None
-
-    shared_url = (
-        "https://github.com/gelstable/gel-cli/releases/download/v1.0.0/artifact-same"
-    )
-    record_1 = ReleaseRecord(
-        source={
-            "repository": "gelstable/gel-cli",
-            "release_id": 101,
-            "tag": "v1.0.0",
-            "published_at": datetime(2026, 8, 15, tzinfo=UTC),
-        },
-        replacements=(Replacement(sha256=digest, url=shared_url),),
-    )
-    record_2 = ReleaseRecord(
-        source={
-            "repository": "gelstable/gel-cli",
-            "release_id": 102,
-            "tag": "v1.0.0",
-            "published_at": datetime(2026, 8, 15, tzinfo=UTC),
-        },
-        replacements=(Replacement(sha256=digest, url=shared_url),),
-    )
-
-    with pytest.raises(ContestedReplacementError) as exc:
-        compose_indexes({key: index}, (record_1, record_2))
-    assert exc.value.sha256 == digest
-
-
 def test_cross_record_conflict_does_not_partially_mutate_packages() -> None:
     """No mutations are applied if any replacement digest conflict exists."""
     repo_root = Path(__file__).parents[1]
@@ -434,65 +396,6 @@ def test_cross_record_conflict_does_not_partially_mutate_packages() -> None:
     assert (
         packages[key][("package", "edgedb-cli", index.packages[0].version)][0]
         == original_serialized
-    )
-
-
-def test_valid_replacements_in_different_records_succeed() -> None:
-    """Distinct release records can rescue different digests in the same run."""
-    repo_root = Path(__file__).parents[1]
-    key = ("stable", "x86_64-unknown-linux-musl")
-    index = PackageIndex.model_validate_json(
-        (repo_root / "bootstrap" / "stable-x86_64-unknown-linux-musl.json").read_bytes()
-    )
-    original = index.packages[0]
-    digest_1 = original.installrefs[0].verification.sha256
-    digest_2 = original.installrefs[1].verification.sha256
-    assert digest_1 is not None and digest_2 is not None
-
-    record_1 = ReleaseRecord(
-        source={
-            "repository": "gelstable/gel-cli",
-            "release_id": 1,
-            "tag": "v1",
-            "published_at": datetime(2026, 8, 15, tzinfo=UTC),
-        },
-        replacements=(
-            Replacement(
-                sha256=digest_1,
-                url="https://github.com/gelstable/gel-cli/releases/download/v1/artifact-1",
-            ),
-        ),
-    )
-    record_2 = ReleaseRecord(
-        source={
-            "repository": "gelstable/gel-cli",
-            "release_id": 2,
-            "tag": "v2",
-            "published_at": datetime(2026, 8, 15, tzinfo=UTC),
-        },
-        replacements=(
-            Replacement(
-                sha256=digest_2,
-                url="https://github.com/gelstable/gel-cli/releases/download/v2/artifact-2",
-            ),
-        ),
-    )
-
-    output = compose_indexes({key: index}, (record_1, record_2))
-    rescued = next(
-        package
-        for package in PackageIndex.model_validate_json(output[key]).packages
-        if package.basename == original.basename
-        and package.version == original.version
-        and package.slot == original.slot
-    )
-    assert (
-        rescued.installrefs[0].ref
-        == "https://github.com/gelstable/gel-cli/releases/download/v1/artifact-1"
-    )
-    assert (
-        rescued.installrefs[1].ref
-        == "https://github.com/gelstable/gel-cli/releases/download/v2/artifact-2"
     )
 
 

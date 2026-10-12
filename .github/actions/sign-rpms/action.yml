@@ -1,0 +1,13 @@
+name: Sign RPMs
+description: Sign RPMs using the caller's protected Environment secrets.
+inputs:
+  directory:
+    description: Directory containing final RPMs.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        INPUT_DIRECTORY: ${{ inputs.directory }}
+      run: bash "$GITHUB_ACTION_PATH/sign-rpms.sh" "$INPUT_DIRECTORY"

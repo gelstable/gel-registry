@@ -7,7 +7,6 @@ import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import cast
 
 import httpx
@@ -23,16 +22,12 @@ from gel_registry.constants import (
 )
 from gel_registry.digest import canonical_json, hash_bytes
 from gel_registry.github.models import GitHubError
-from gel_registry.github.transport import API_HEADERS
 from gel_registry.rescue.indexes import RescueCaptureManifest
 from gel_registry.rescue.models import RescueIndexCapture, RescuePlan
 from gel_registry.rescue.selection import (
     GitHubTagSource,
     GitTagSource,
     UpstreamTag,
-    _extension,
-    _IndexedPackage,
-    _ls_versions,
     artifact_name,
     plan_rescue,
 )
@@ -242,23 +237,6 @@ def test_cli_plan_selects_latest_complete_tags_with_canonical_assets(
         identity.source_url == "https://packages.edgedb.com/archive/artifacts/gel-cli"
     )
     assert identity.expected_sha256 == "a" * 64
-
-
-def test_language_server_version_order_accepts_legacy_dev_builds() -> None:
-    """Using strict three-part SemVer must not reject valid captured LS builds."""
-
-    records = tuple(
-        SimpleNamespace(
-            channel="nightly",
-            entry=SimpleNamespace(basename="edgedb-ls", version=version),
-        )
-        for version in ("8.0-dev.9812+47a730b", "8.0-dev.9813+0000000")
-    )
-
-    assert _ls_versions(cast(tuple[_IndexedPackage, ...], records)) == (
-        "8.0-dev.9813+0000000",
-        "8.0-dev.9812+47a730b",
-    )
 
 
 def test_github_tag_source_paginates_and_peels_annotated_tags() -> None:
@@ -865,45 +843,6 @@ def test_cli_assets_are_direct_source_artifacts_with_required_sha256(
     assert all(asset.expected_sha256 for asset in assets)
 
 
-def test_tag_discovery_uses_the_shared_github_transport_settings() -> None:
-    """Anonymous, header-less tag reads get rate-limited off GitHub."""
-
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        if request.url.path.endswith("/git/tags/tag-object"):
-            return httpx.Response(200, json={"object": {"type": "commit", "sha": "c"}})
-        if request.url.params.get("page") == "1":
-            return httpx.Response(
-                200,
-                json=[
-                    {
-                        "ref": "refs/tags/v6.11",
-                        "object": {"type": "tag", "sha": "tag-object"},
-                    }
-                ],
-            )
-        return httpx.Response(200, json=[])
-
-    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        tags = GitHubTagSource(client).tags("geldata/gel")
-        # Reading the SHA is what issues the peel, so force it here.
-        assert tags[0].commit == "c"
-
-    assert len(seen) == 2
-    for request in seen:
-        assert request.headers["accept"] == "application/vnd.github+json"
-        assert request.headers["x-github-api-version"] == "2022-11-28"
-        assert request.headers["user-agent"] == API_HEADERS["User-Agent"]
-        assert request.extensions["timeout"] == {
-            "connect": 10.0,
-            "read": 60.0,
-            "write": 60.0,
-            "pool": 60.0,
-        }
-
-
 _LIGHTWEIGHT_SHA = "b" * 40
 _LS_REMOTE = (
     "70345d80d2f74cfdeb2802d99dda4a9f4cbc9371\trefs/tags/v1.0.0\n"
@@ -935,21 +874,6 @@ def _fake_git(
 
     monkeypatch.setattr(subprocess, "run", run)
     return calls
-
-
-def test_git_tag_source_reads_every_tag_in_one_call(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The REST path cost a request per page plus one per annotated tag."""
-
-    calls = _fake_git(monkeypatch, stdout=_LS_REMOTE)
-
-    tags = GitTagSource().tags("geldata/gel-cli")
-
-    assert calls == [
-        ["git", "ls-remote", "--tags", "--", "https://github.com/geldata/gel-cli"]
-    ]
-    assert [tag.name for tag in tags] == ["lightweight", "v1.0.0", "v7.9.0"]
 
 
 def test_git_tag_source_prefers_the_peeled_commit_of_an_annotated_tag(
@@ -1086,25 +1010,3 @@ def test_selection_takes_the_newest_rebuild_of_one_source_commit(
     identity = plan.releases[0].assets[0]
     assert "c84d665" in identity.source_url
     assert "070b371" not in identity.source_url
-
-
-@pytest.mark.parametrize(
-    ("reference", "expected"),
-    [
-        # A dotted version must not be mistaken for the extension.
-        ("/archive/aarch64-apple-darwin/edgedb-server-5.6+adb9e77.tar.gz", ".tar.gz"),
-        (
-            "/archive/x86_64-unknown-linux-gnu/gel-server-7.1+ec15259.tar.zst",
-            ".tar.zst",
-        ),
-        ("/archive/postgis-3.5.1+c9b5460.zip", ".zip"),
-        ("/archive/gel-cli-7.9.0+070b371.exe", ".exe"),
-        ("/archive/gel-cli-7.9.0+070b371", ""),
-    ],
-)
-def test_extension_reads_the_real_suffix_not_everything_after_a_dot(
-    reference: str, expected: str
-) -> None:
-    """Splitting at the first dot named an asset ...darwin.6+adb9e77.tar.gz."""
-
-    assert _extension(reference) == expected

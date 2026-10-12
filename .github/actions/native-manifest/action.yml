@@ -1,0 +1,28 @@
+name: Native manifest section
+description: Hash final package bytes and write the native manifest section.
+inputs:
+  directory:
+    description: Final package directory.
+    required: true
+  repository:
+    description: Declaring GitHub owner/repository.
+    required: true
+  tag:
+    description: Declaring release tag.
+    required: true
+outputs:
+  native:
+    description: JSON native section for a combined manifest.
+    value: ${{ steps.manifest.outputs.native }}
+runs:
+  using: composite
+  steps:
+    - id: manifest
+      shell: bash
+      env:
+        INPUT_DIRECTORY: ${{ inputs.directory }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_TAG: ${{ inputs.tag }}
+      run: |
+        native=$(python3 "$GITHUB_ACTION_PATH/manifest.py" "$INPUT_DIRECTORY" "$INPUT_REPOSITORY" "$INPUT_TAG")
+        printf 'native=%s\n' "$native" >> "$GITHUB_OUTPUT"

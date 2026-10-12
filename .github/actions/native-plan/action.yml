@@ -1,0 +1,30 @@
+name: Plan native packages
+description: Select portable sources and the next native revision.
+inputs:
+  product:
+    description: server or postgis.
+    required: true
+  source_tag:
+    description: Existing portable release tag.
+    required: true
+  repack:
+    description: Allocate a new revision for an already packaged version.
+    default: 'false'
+  registry_url:
+    description: Portable registry root.
+    default: https://registry.gelstable.com
+outputs:
+  plan:
+    description: JSON array of build items; empty when already packaged.
+    value: ${{ steps.plan.outputs.plan }}
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      env:
+        INPUT_PRODUCT: ${{ inputs.product }}
+        INPUT_SOURCE_TAG: ${{ inputs.source_tag }}
+        INPUT_REPACK: ${{ inputs.repack }}
+        INPUT_REGISTRY_URL: ${{ inputs.registry_url }}
+      run: python3 "$GITHUB_ACTION_PATH/plan.py"

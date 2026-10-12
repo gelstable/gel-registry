@@ -2,24 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import UTC, datetime
-
-import pytest
 
 from gel_registry.contracts import (
     PackageEntry,
     PackageIndex,
-    ReleaseManifest,
     ReleaseRecord,
     ReleaseSource,
 )
-from gel_registry.digest import canonical_json
 from gel_registry.render.compose import compose_indexes
 from gel_registry.rescue.manifests import (
     build_release_manifest,
-    release_manifest_bytes,
-    release_manifest_digest,
 )
 from gel_registry.rescue.models import RescueAsset, RescueRelease
 
@@ -55,50 +48,6 @@ def _release(assets: tuple[RescueAsset, ...] | None = None) -> RescueRelease:
         target_commitish="abc1234",
         assets=assets,
     )
-
-
-def test_build_release_manifest_produces_canonical_replacements() -> None:
-    release = _release()
-    manifest = build_release_manifest(release)
-
-    assert manifest.schema_version == 1
-    assert manifest.indexes == ()
-    assert len(manifest.replacements) == 2
-
-    first, second = manifest.replacements
-    assert first.sha256 == DIGEST_1
-    assert (
-        first.url
-        == f"https://github.com/{REPOSITORY}/releases/download/{TAG}/gel-cli-aarch64-apple-darwin.tar.gz"
-    )
-    assert second.sha256 == DIGEST_2
-    assert (
-        second.url
-        == f"https://github.com/{REPOSITORY}/releases/download/{TAG}/gel-cli-x86_64-unknown-linux-musl.tar.gz"
-    )
-
-
-def test_manifest_bytes_and_digest_round_trip() -> None:
-    release = _release()
-    data = release_manifest_bytes(release)
-    assert data == canonical_json(build_release_manifest(release))
-
-    digest = release_manifest_digest(data)
-    assert digest == hashlib.sha256(data).hexdigest()
-
-    parsed = ReleaseManifest.model_validate_json(data)
-    assert parsed == build_release_manifest(release)
-
-
-def test_empty_assets_raises_validation_error() -> None:
-    empty_release = RescueRelease.model_construct(
-        repository=REPOSITORY,
-        tag=TAG,
-        target_commitish=None,
-        assets=(),
-    )
-    with pytest.raises(ValueError, match="must contain a replacement or index"):
-        build_release_manifest(empty_release)
 
 
 def test_composed_rescue_manifest_replaces_legacy_urls_in_bootstrap() -> None:

@@ -1,0 +1,13 @@
+name: Check release manifest
+description: Validate using the registry contract at this action's commit.
+inputs:
+  file:
+    description: Path to gel-registry.json.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        INPUT_FILE: ${{ inputs.file }}
+      run: uv run --project "$GITHUB_ACTION_PATH/../../.." gel-registry manifest check "$INPUT_FILE"

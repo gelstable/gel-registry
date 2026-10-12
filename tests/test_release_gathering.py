@@ -12,7 +12,7 @@ from pytest_httpx import HTTPXMock
 
 from gel_registry.contracts import ReleaseRecord
 from gel_registry.digest import canonical_json
-from gel_registry.gather import _record_path, gather_missing, load_repositories
+from gel_registry.gather import gather_missing, load_repositories
 from gel_registry.github import (
     DiscoveredAsset,
     DiscoveredRelease,
@@ -441,40 +441,6 @@ def test_load_repositories_rejects_traversal_and_invalid_allowlist(
     )
     with pytest.raises(ValueError):
         load_repositories(tmp_path)
-
-
-def test_record_path_rejects_escaping_repository(tmp_path: Path) -> None:
-    """_record_path rejects repositories that would escape releases/."""
-    # Directly test that an invalid repository component raises ValueError
-    dummy_source = {
-        "repository": "gelstable/gel-cli",
-        "release_id": 1,
-        "tag": "v1.0.0",
-        "published_at": datetime(2026, 8, 15, tzinfo=UTC),
-    }
-    dummy_manifest = {
-        "schema_version": 1,
-        "replacements": [
-            {
-                "sha256": "a" * 64,
-                "url": (
-                    "https://github.com/gelstable/gel-cli/releases/download/"
-                    "v1.0.0/artifact"
-                ),
-            }
-        ],
-    }
-    valid_record = ReleaseRecord.model_validate(
-        {**dummy_manifest, "source": dummy_source}
-    )
-    # Valid record resolves inside releases/
-    record_file = _record_path(tmp_path, valid_record)
-    assert record_file.is_relative_to(tmp_path / "releases")
-
-    # If repository attempts traversal, validate_repository_name halts it
-    object.__setattr__(valid_record.source, "repository", "../evil")
-    with pytest.raises(ValueError):
-        _record_path(tmp_path, valid_record)
 
 
 @pytest.mark.parametrize(

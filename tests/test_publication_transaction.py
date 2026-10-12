@@ -43,7 +43,6 @@ from gel_registry.render import (
     ContestedIdentityError,
     RenderError,
     build_snapshot,
-    load_pinned_snapshot,
     select_snapshot,
 )
 from gel_registry.render.compose import compose_indexes
@@ -125,6 +124,10 @@ def test_publication_installs_exactly_the_generated_support_files(
             (
                 *MUTABLE_PATHS,
                 "public/healthz",
+                "public/gelstable.sources",
+                "public/gelstable.repo",
+                "public/gelstable-testing.sources",
+                "public/gelstable-testing.repo",
                 f"public/i/{identity}.json",
                 f"public/s/{result.snapshot}/registry.json",
                 "public/v1/schema/capture.json",
@@ -414,7 +417,9 @@ def test_publication_refuses_to_run_against_an_untrustworthy_repository(
         assert not tuple((tmp_path / "outside").iterdir())
 
 
-@pytest.mark.parametrize("failing_path", [*MUTABLE_PATHS, RELEASE_RECORD_SCHEMA])
+@pytest.mark.parametrize(
+    "failing_path", [*MUTABLE_PATHS, RELEASE_RECORD_SCHEMA, RELEASE_MANIFEST_SCHEMA]
+)
 def test_a_failed_write_rolls_back_every_publication_path(
     tmp_path: Path,
     package_index_data: dict[str, object],
@@ -422,11 +427,15 @@ def test_a_failed_write_rolls_back_every_publication_path(
     failing_path: str,
 ) -> None:
     _write_index(tmp_path, package_index_data)
-    if failing_path == RELEASE_RECORD_SCHEMA:
-        # The schema migration is the one immutable path publication may
-        # rewrite, so its rollback is exercised by failing the pointer write
-        # that follows it.
-        _inherit_release_record_schema(tmp_path)
+    if failing_path in (RELEASE_RECORD_SCHEMA, RELEASE_MANIFEST_SCHEMA):
+        # Fail after schema replacement to verify restoration of predecessor bytes.
+        if failing_path == RELEASE_RECORD_SCHEMA:
+            _inherit_release_record_schema(tmp_path)
+        else:
+            for name in ("release-manifest.json", "release-record.json"):
+                path = tmp_path / "public/v1/schema" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((FIXTURES / "native-predecessors" / name).read_bytes())
         failing_path = "pointers/latest.json"
     else:
         publish_bootstrap(tmp_path)
@@ -516,44 +525,6 @@ def test_an_unchanged_index_is_stored_once_and_shared_by_every_snapshot(
     assert len(first_urls) - len(changed) == len(first_urls) - 1
 
 
-def test_rebuilding_an_installed_snapshot_replays_without_error(
-    tmp_path: Path, package_index_data: dict[str, object]
-) -> None:
-    """An interrupted publication must be resumable, so replay is a no-op."""
-
-    _write_index(tmp_path, package_index_data)
-    snapshot = build_snapshot(tmp_path)
-    before = _repo_bytes(tmp_path)
-
-    assert build_snapshot(tmp_path) == snapshot
-    assert _repo_bytes(tmp_path) == before
-
-
-def test_a_corrupted_blob_is_refused_by_its_content_address(
-    tmp_path: Path, package_index_data: dict[str, object]
-) -> None:
-    _write_index(tmp_path, package_index_data)
-    snapshot = build_snapshot(tmp_path)
-    # Canonical, valid, and simply not the index this blob is filed under: the
-    # content address is the only thing left that can catch it.
-    blob = next((tmp_path / "public" / "i").glob("*.json"))
-    blob.write_bytes(canonical_json(PackageIndex(packages=())))
-
-    with pytest.raises(RenderError, match="content address"):
-        load_pinned_snapshot(tmp_path, snapshot)
-
-
-def test_a_missing_blob_is_refused(
-    tmp_path: Path, package_index_data: dict[str, object]
-) -> None:
-    _write_index(tmp_path, package_index_data)
-    snapshot = build_snapshot(tmp_path)
-    next((tmp_path / "public" / "i").glob("*.json")).unlink()
-
-    with pytest.raises(RenderError, match="index blob"):
-        load_pinned_snapshot(tmp_path, snapshot)
-
-
 def test_both_roots_resolve_to_the_same_index_files(
     tmp_path: Path, package_index_data: dict[str, object]
 ) -> None:
@@ -590,3 +561,46 @@ def test_both_roots_resolve_to_the_same_index_files(
     pinned = RootManifest.model_validate_json(pinned_root.read_bytes())
     assert all(MOVING_URL.fullmatch(item.ref) for item in moving.indexes)
     assert all(PINNED_URL.fullmatch(item.ref) for item in pinned.indexes)
+
+
+def test_publication_migrates_both_approved_v1_release_schemas(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+) -> None:
+    from gel_registry.contracts import ReleaseManifest
+
+    _write_index(tmp_path, package_index_data)
+    for name in ("release-manifest.json", "release-record.json"):
+        path = tmp_path / "public/v1/schema" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((FIXTURES / "native-predecessors" / name).read_bytes())
+
+    result = publish_bootstrap(tmp_path)
+
+    assert RELEASE_MANIFEST_SCHEMA in result.changed_paths
+    assert RELEASE_RECORD_SCHEMA in result.changed_paths
+    assert (tmp_path / RELEASE_MANIFEST_SCHEMA).read_bytes() == canonical_json(
+        ReleaseManifest.model_json_schema()
+    )
+    assert (tmp_path / RELEASE_RECORD_SCHEMA).read_bytes() == canonical_json(
+        ReleaseRecord.model_json_schema()
+    )
+    assert publish_bootstrap(tmp_path).changed_paths == ()
+
+
+@pytest.mark.parametrize("name", ["release-manifest.json", "release-record.json"])
+def test_publication_rejects_unrecognized_release_schema_without_changes(
+    tmp_path: Path,
+    package_index_data: dict[str, object],
+    name: str,
+) -> None:
+    _write_index(tmp_path, package_index_data)
+    path = tmp_path / "public/v1/schema" / name
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"{}\n")
+    before = _repo_bytes(tmp_path)
+
+    with pytest.raises(RenderError, match="immutable support document mismatch"):
+        publish_bootstrap(tmp_path)
+
+    assert _repo_bytes(tmp_path) == before

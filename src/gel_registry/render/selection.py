@@ -19,7 +19,12 @@ _SNAPSHOT_ID = re.compile(r"^[0-9a-f]{16}$")
 def select_snapshot(repo: Path) -> None:
     """Materialize moving roots from the snapshot selected by the pointer."""
 
+    from ..gather import load_repositories
+
     repo = Path(repo)
+    repositories = (
+        load_repositories(repo) if (repo / "sources/github.json").exists() else ()
+    )
     pointer_path = repo / "pointers" / "latest.json"
     pointer = files.read_model(pointer_path, Pointer, "latest pointer")
     selected = pointer.snapshot
@@ -50,7 +55,11 @@ def select_snapshot(repo: Path) -> None:
     _publish_moving_documents(
         (public / "registry.json", canonical_json(moving), "moving root"),
         (public / "v1" / "snapshots.json", canonical_json(listing), "snapshot listing"),
-        (repo / "vercel.toml", hosting_config(moving), "hosting configuration"),
+        (
+            repo / "vercel.toml",
+            hosting_config(moving, repositories),
+            "hosting configuration",
+        ),
     )
 
 
